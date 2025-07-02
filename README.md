@@ -1,15 +1,45 @@
-# WatchMe 管理画面
+# WatchMe 音声データ心理分析システム
 
-WatchMe プロジェクトの管理画面です。FastAPI と Supabase を使用してユーザー、デバイス、ViewerLinkを管理します。
+**音声データに基づく心理・行動・感情の可視化システム**  
+FastAPIとSupabaseを使用したマルチデバイス・レンジ管理型閲覧システムです。
 
-## 🚀 特徴
+## 🎯 システム概要
 
-- **ユーザー管理**: システムに登録されているユーザーの表示・作成
-- **デバイス管理**: 音声取得デバイスの登録・表示
-- **ViewerLink管理**: ユーザーとデバイスの関連付け管理
-- **モダンなUI**: Tailwind CSS を使用したレスポンシブな管理画面
-- **Supabase連携**: リアルタイムデータベース操作
-- **統計情報**: システム全体の統計表示
+### 🔍 用途・目的
+- **音声データに基づく心理・行動・感情の可視化**
+- **マルチデバイス・レンジ管理型閲覧システム**
+- **時間範囲制限付きデータ閲覧権限**
+
+### 🚀 主要機能
+
+#### 📱 自分のデバイス一覧
+- 音声データ取得デバイスの状態表示
+- アクティブ状態のリアルタイム表示
+- 音声データ数、最終同期時刻の監視
+
+#### 📊 グラフ表示
+- **😊 感情分析**: 音声データからの感情スコア可視化
+- **🚶 行動分析**: 行動パターンのグラフ化
+- **🧠 心理分析**: 心理状態の時系列変化
+- 時間範囲指定によるデータフィルタリング
+
+#### 🔗 ViewerLink管理
+- ユーザーとデバイスの時間範囲制限付き関連付け
+- **必須項目**: start_time, end_timeは必須設定
+- アクティブ状態のリアルタイム表示
+
+#### 📦 QRコード連携
+- デバイスリンク用QRコード生成
+- 24時間有効期限付き
+
+#### 🔄 デバイス管理
+- デバイス状態監視 (Active/Inactive/Syncing/Error)
+- 音声データアップロード機能
+- 同期操作と最終同期時刻管理
+
+#### 📈 統計情報
+- リアルタイムシステム統計
+- アクティブデバイス数、総音声データ数など
 
 ## 📊 データベース構造
 
@@ -19,22 +49,66 @@ WatchMe プロジェクトの管理画面です。FastAPI と Supabase を使用
 - `email` (String)
 - `created_at` (DateTime)
 
-### devices テーブル
+### devices テーブル - 音声取得デバイス
 - `device_id` (UUID, Primary Key)
-- `device_type` (String)
-- `registered_at` (DateTime)
+- `device_type` (String) - デバイス種別
+- `status` (String) - デバイス状態 (active/inactive/syncing/error)
+- `registered_at` (DateTime) - 登録日時
+- `last_sync` (DateTime, Optional) - 最終同期時刻
+- `total_audio_count` (Integer) - 総音声データ数
+- `qr_code` (String, Optional) - QRコード情報
 
-### viewer_links テーブル
+### viewer_links テーブル - 時間範囲制限付き関連付け
 - `viewer_link_id` (UUID, Primary Key)
 - `user_id` (UUID, Foreign Key)
 - `device_id` (UUID, Foreign Key)
-- `start_time` (DateTime)
-- `end_time` (DateTime, nullable)
+- `start_time` (DateTime, **必須**) - 閲覧開始時刻
+- `end_time` (DateTime, **必須**) - 閲覧終了時刻
 
-## 📋 要件
+### 将来のテーブル設計 (実装予定)
 
-- Python 3.8+
-- Supabase プロジェクト（設定済み）
+#### audio_data テーブル - 音声データ管理
+- `audio_id` (UUID, Primary Key)
+- `device_id` (UUID, Foreign Key)
+- `recorded_at` (DateTime) - 録音時刻
+- `file_path` (String) - ファイルパス
+- `file_size` (Integer) - ファイルサイズ
+- `duration_seconds` (Integer) - 長さ(秒)
+- `processed` (Boolean) - 処理状態
+- `created_at` (DateTime) - 作成日時
+
+#### graph_data テーブル - グラフデータ管理
+- `graph_id` (UUID, Primary Key)
+- `device_id` (UUID, Foreign Key)
+- `audio_id` (UUID, Foreign Key)
+- `graph_type` (String) - 'emotion', 'behavior', 'psychology'
+- `time_range_start` (DateTime) - 分析開始時刻
+- `time_range_end` (DateTime) - 分析終了時刻
+- `data_json` (JSONB) - グラフデータ
+- `generated_at` (DateTime) - 生成日時
+
+#### device_sessions テーブル - デバイスセッション管理
+- `session_id` (UUID, Primary Key)
+- `device_id` (UUID, Foreign Key)
+- `started_at` (DateTime) - セッション開始
+- `ended_at` (DateTime, Optional) - セッション終了
+- `status` (String) - 'active', 'completed', 'error'
+- `audio_count` (Integer) - セッション中の音声数
+
+## 📋 システム要件
+
+### サーバー要件
+- **Python 3.8+**
+- **Supabase プロジェクト** (設定済み)
+
+### デバイス要件
+- **音声取得デバイス**: iPhone, Android, iPad, PCなど
+- **自動音声送信機能**: 常時データ送信対応
+
+### ブラウザ要件
+- **モダンブラウザ** (Chrome, Firefox, Safari, Edge 最新版)
+- **JavaScript 有効**
+- **Canvas API 対応** (QRコード、グラフ表示用)
 
 ## 🛠️ セットアップ
 
@@ -83,51 +157,100 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --reload
 
 ## 🌐 API エンドポイント
 
-### ユーザー管理
+### 📈 ユーザー管理 API
 - `GET /api/users` - 全ユーザーを取得
 - `POST /api/users` - 新しいユーザーを作成
 
-### デバイス管理
+### 🎤 デバイス管理 API
 - `GET /api/devices` - 全デバイスを取得
 - `POST /api/devices` - 新しいデバイスを作成
+- `GET /api/devices/{device_id}/status` - デバイス状態取得
+- `PUT /api/devices/{device_id}` - デバイス情報更新
+- `PUT /api/devices/{device_id}/sync` - デバイス同期完了通知
+- `GET /api/devices/{device_id}/qr` - QRコード生成
+- `POST /api/devices/{device_id}/audio` - 音声データアップロード
+- `GET /api/devices/{device_id}/audio` - デバイスの音声データ一覧取得
 
-### ViewerLink管理
+### 🔗 ViewerLink管理 API
 - `GET /api/viewer-links` - 全ViewerLinkを取得
 - `GET /api/viewer-links/details` - ユーザー・デバイス情報付きViewerLinkを取得
 - `GET /api/viewer-links/by-user/{user_id}` - 特定ユーザーのViewerLinkを取得
-- `POST /api/viewer-links` - 新しいViewerLinkを作成（ユーザーとデバイスを関連付け）
+- `POST /api/viewer-links` - 新しいViewerLinkを作成 (**start_time, end_time必須**)
 - `DELETE /api/viewer-links/{link_id}` - ViewerLinkを削除
+- `POST /api/viewer-links/validate` - 閲覧権限検証
+- `GET /api/viewer-links/{user_id}/timeline` - ユーザーの閲覧履歴タイムライン
 
-### その他
+### 📊 グラフ・データ分析 API
+- `GET /api/devices/{device_id}/graphs` - デバイスのグラフデータ取得
+- `POST /api/graphs/generate` - グラフ手動生成
+- `GET /api/graphs/{graph_id}` - 特定グラフデータ取得
+
+### 📱 ユーザーアクセス API
+- `GET /api/my-devices` - ログインユーザーのリンク済みデバイス一覧
+
+### 📉 システム情報 API
 - `GET /health` - ヘルスチェック
-- `GET /api/stats` - システム統計情報
-- `GET /` - 管理画面（HTML）
+- `GET /api/stats` - システム統計情報 (アクティブデバイス数、総音声データ数など)
+- `GET /` - WatchMe管理画面 (メインUI)
 
 ## 🏗️ プロジェクト構造
 
 ```
 admin/
 ├── api/
-│   └── supabase_client.py    # Supabase接続クライアント
+│   └── supabase_client.py       # Supabase接続クライアント
 ├── models/
-│   └── schemas.py            # 正しいPydanticモデル定義
+│   └── schemas.py               # WatchMe対応 Pydanticモデル定義
 ├── templates/
-│   └── index.html            # 管理画面HTML
+│   └── index.html               # WatchMe管理画面 (音声心理分析UI)
 ├── static/
-│   └── admin.js              # フロントエンド JavaScript
-├── main.py                   # FastAPIメインアプリケーション
-├── requirements.txt          # Python依存関係
-├── .env                      # 環境変数（Supabase設定）
-├── .gitignore               # Git除外ファイル
-└── README.md                # このファイル
+│   └── admin.js                 # WatchMeフロントエンド (グラフ、QRコード、デバイス管理)
+├── main.py                      # WatchMe FastAPIアプリケーションサーバー
+├── requirements.txt             # Python依存関係
+├── .env                         # 環境変数 (Supabase設定)
+├── .env.example                 # 環境変数サンプル
+├── .gitignore                   # Git除外ファイル (調査ファイルも除外)
+├── REQUIREMENTS_ANALYSIS.md     # WatchMe要件分析書
+└── README.md                    # このファイル
 ```
 
-## 💻 使用方法
+## 💻 WatchMeシステム使用方法
+
+### 🚀 クイックスタート
 
 1. **サーバー起動後**: ブラウザで `http://localhost:9000` にアクセス
-2. **ユーザー管理**: 「ユーザー管理」タブでユーザーの追加・確認
-3. **デバイス管理**: 「デバイス管理」タブでデバイスの登録・表示
-4. **ViewerLink管理**: 「ViewerLink管理」タブでユーザーとデバイスの関連付け管理
+
+2. **自分のデバイス一覧**: メインタブでユーザーIDを入力してデバイス状態を確認
+   - 音声データ数、最終同期時刻、アクティブ状態をリアルタイム表示
+   - 「📊 グラフ表示」ボタンで直接分析画面へ移動
+
+3. **グラフ表示**: グラフタブで心理・行動・感情データを可視化
+   - 😊 **感情分析**: 音声からの感情スコア
+   - 🚶 **行動分析**: 行動パターンの変化
+   - 🧠 **心理分析**: 心理状態の推移
+   - 時間範囲を指定してデータをフィルタリング
+
+### 🔧 管理者機能
+
+4. **ユーザー管理**: システムユーザーの追加・確認
+
+5. **デバイス管理**: 音声取得デバイスの登録・状態管理
+   - デバイス状態 (Active/Inactive/Syncing/Error)
+   - 音声データ数、最終同期時刻の監視
+   - QRコード生成、手動同期機能
+
+6. **ViewerLink管理**: ユーザーとデバイスの時間範囲制限付き関連付け
+   - ❗ **重要**: start_time と end_time は必須入力
+   - アクティブ状態のリアルタイム表示
+   - QRコードでのデバイスリンク機能
+
+### 🕰️ 時間範囲制御の重要性
+
+WatchMeシステムでは、**セキュリティとプライバシー保護**のため、すべてのデータアクセスに時間範囲制限が必須です。
+
+- **無制限アクセスは不可**: 必ず開始時刻と終了時刻を設定
+- **リアルタイム検証**: 現在時刻が許可範囲内か自動チェック
+- **期限切れ自動無効化**: 終了時刻過ぎで自動的にアクセス無効化
 
 ## 🔧 開発
 
@@ -155,47 +278,291 @@ curl http://localhost:9000/api/stats
 
 ## 🐛 トラブルシューティング
 
-### ポートが使用中の場合
+### 🔄 ポート関連エラー
 
 ```bash
 # 使用中のポートを確認
 lsof -i :9000
 
-# プロセスを終了
+# uvicornプロセスを一括終了
+pkill -f "uvicorn"
+
+# 特定プロセスを終了
 kill -9 <PID>
 ```
 
-### Supabase接続エラー
+### 📡 Supabase接続エラー
 
-1. `.env` ファイルの URL とキーを確認
-2. Supabase プロジェクトが起動していることを確認
-3. ネットワーク接続を確認
+1. **環境変数確認**:
+   ```bash
+   cat .env
+   # SUPABASE_URL=https://your-project.supabase.co
+   # SUPABASE_KEY=your-anon-key
+   ```
 
-### 接続テスト
+2. **Supabaseプロジェクト状態確認**:
+   - Supabaseダッシュボードでプロジェクトがアクティブか確認
+   - API URLとキーが正しいか確認
+
+3. **ネットワーク接続確認**:
+   ```bash
+   ping your-project.supabase.co
+   ```
+
+### 🔍 データベーススキーマエラー
+
+- **テーブル不存在エラー**: `users`, `devices`, `viewer_links`テーブルが存在するか確認
+- **フィールドエラー**: `status`, `last_sync`, `total_audio_count`フィールドが追加されているか確認
+
+### 🎤 音声データエラー
+
+- **グラフが表示されない**: 現在はサンプルデータで表示されます
+- **QRコードエラー**: ブラウザのCanvas API対応を確認
+- **デバイス同期エラー**: デバイスIDが正しいか確認
+
+### 🗺️ 時間範囲エラー
+
+- **ViewerLink作成失敗**: start_timeとend_timeが必須であることを確認
+- **アクセス拒否**: 現在時刻が許可範囲内か確認
+- **時間順序エラー**: 開始時刻 < 終了時刻の順序を確認
+
+### ⚙️ 接続テストコマンド
 
 ```bash
+# ヘルスチェック
+curl http://localhost:9000/health
+
+# 統計情報取得
 curl http://localhost:9000/api/stats
+
+# APIドキュメント確認
+open http://localhost:9000/docs
+
+# メインUI確認
+open http://localhost:9000
 ```
 
-## 📝 開発履歴
+## 🕰️ WatchMeシステムの進化
+
+### 📋 開発マイルストーン
+
+- **v3.1 (2025-07-02)** - ユーザー認証システム完全統合
+  - 🔐 マーケティングサイト認証連携
+  - 🗄️ auth.users + public.users 統合データベース
+  - 🎯 ダッシュボード・マイページ開発指針策定
+  - 🔗 システム間API連携パターン確立
+  - 📋 統合アーキテクチャ設計完了
+
+- **v3.0 (WatchMe対応)** - 音声データ心理分析システム完全対応
+  - 📱 自分のデバイス一覧機能
+  - 📊 心理・行動・感情グラフ表示
+  - 📦 QRコードデバイスリンク機能
+  - ⚙️ 時間範囲必須化セキュリティ強化
+  - 🔄 デバイス状態リアルタイム監視
 
 - **v2.0** - 実際のSupabaseデータ構造に基づく完全な再設計
 - **v1.0** - 初期バージョン（非推奨）
 
-## ✅ 動作確認済み
+### ✅ 現在の実装状態
 
+#### ✅ 完全実装済み
 - 実際のSupabaseデータ構造に完全対応
-- 全APIエンドポイントが正常動作
-- フロントエンドとバックエンドの完全統合
+- 全管理APIエンドポイントが正常動作
+- WatchMe新機能 API完全実装
+- モダンUI/UXデザイン
+- 時間範囲制御セキュリティ
+- リアルタイム状態監視
 
-## 🤝 貢献
+#### 🚧 部分実装（将来版対応）
+- **音声データテーブル**: `audio_data`, `graph_data`, `device_sessions`
+- **実際の音声解析エンジン**: 現在はサンプルデータで動作
+- **30分/1時間単位自動グラフ生成**: 手動グラフ生成は実装済み
+- **モバイルアプリ連携**: QRコードベースの基本機能は実装済み
 
-1. このリポジトリをフォーク
-2. フィーチャーブランチを作成 (`git checkout -b feature/AmazingFeature`)
-3. 変更をコミット (`git commit -m 'Add some AmazingFeature'`)
-4. ブランチにプッシュ (`git push origin feature/AmazingFeature`)
-5. プルリクエストを作成
+### 🚀 今後の開発予定
+
+1. **フェーズ2**: 音声データテーブル実装
+2. **フェーズ3**: 実際の音声解析エンジン統合
+3. **フェーズ4**: 自動グラフ生成パイプライン
+4. **フェーズ5**: モバイルアプリ完全統合
+
+## 🔐 ユーザー認証連携システム
+
+### 📋 マーケティングサイト連携
+WatchMe管理システムは、マーケティングサイト（`/web_marketing`）のユーザー認証システムと完全連携しています。
+
+**マーケティングサイト認証**:
+- 新規会員登録・ログイン機能
+- Supabase Auth統合
+- auth.users + public.users 二重保存システム
+
+### 🗄️ 統合データベース構造
+
+**共通データベース**: 同一Supabase プロジェクト `qvtlwotzuzbavrzqhyvt`
+
+#### 認証テーブル（マーケティングサイト管理）
+```sql
+-- auth.users（Supabase認証システム）
+- id (UUID) - 認証ユーザーID
+- email - メールアドレス
+- raw_user_meta_data - メタデータ（表示名等）
+
+-- public.users（プロファイル情報）
+- user_id (UUID) - auth.usersのidと連携
+- name (TEXT) - 表示名
+- email (TEXT) - メールアドレス
+- newsletter_subscription (BOOLEAN)
+- created_at, updated_at
+```
+
+#### WatchMe管理テーブル（管理システム管理）
+```sql
+-- devices（音声取得デバイス）
+-- viewer_links（時間範囲制限付きアクセス権限）
+-- audio_data（将来実装）
+-- graph_data（将来実装）
+-- device_sessions（将来実装）
+```
+
+### 🔗 システム間連携
+
+#### ユーザーフロー
+1. **マーケティングサイト**: 新規会員登録 → auth.users + public.users 作成
+2. **管理システム**: public.users.user_id を使用してデバイス・データ管理
+3. **ダッシュボード開発**: 同一user_idでユーザー情報・デバイス・音声データを統合表示
+
+#### API連携パターン
+```python
+# 管理システムでのユーザー情報取得例
+async def get_user_profile(user_id: UUID):
+    # public.usersからプロファイル取得
+    user = await supabase.table('users').select('*').eq('user_id', user_id).single()
+    
+    # 同一user_idでデバイス情報取得
+    devices = await supabase.table('devices').select('*').eq('user_id', user_id)
+    
+    return {"profile": user, "devices": devices}
+```
+
+### 🎯 ダッシュボード・マイページ開発指針
+
+#### 推奨開発フロー
+1. **認証状態確認**: Supabase Auth セッション確認
+2. **ユーザー情報取得**: public.users テーブルから name, email 取得
+3. **デバイス一覧表示**: devices テーブルから user_id で絞り込み
+4. **音声データ表示**: audio_data テーブル（実装時）から関連データ取得
+
+#### マイページ必須要素
+```javascript
+// マイページで使用する基本データ構造
+const userDashboard = {
+    profile: {
+        name: "ユーザー表示名",    // public.users.name
+        email: "user@example.com", // public.users.email
+        userId: "uuid-string"      // auth.users.id
+    },
+    devices: [
+        {
+            deviceId: "uuid",
+            deviceType: "iPhone",
+            status: "active",
+            totalAudioCount: 150,
+            lastSync: "2025-07-02T23:30:00Z"
+        }
+    ],
+    analytics: {
+        // 音声分析データ（将来実装）
+        emotionTrends: [],
+        behaviorPatterns: []
+    }
+}
+```
+
+#### セキュリティ考慮事項
+- **RLS（Row Level Security）**: すべてのテーブルで auth.uid() = user_id 制限
+- **時間範囲制御**: viewer_links での厳密なアクセス制御
+- **デバイス認証**: QRコード・デバイスIDによる安全な連携
+
+### 🔧 開発環境設定
+
+#### 共通環境変数
+```env
+# 両システム共通のSupabase設定
+SUPABASE_URL=https://qvtlwotzuzbavrzqhyvt.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# 管理システム設定
+ADMIN_PORT=9000
+
+# マーケティングサイト設定
+NODE_ENV=development
+```
+
+#### 開発時の注意点
+1. **データ整合性**: user_id の一致を常に確認
+2. **権限管理**: 適切なRLSポリシー設定
+3. **エラーハンドリング**: 認証エラー・権限エラーの適切な処理
+4. **テストデータ**: Gmail+エイリアス機能での安全なテスト
+
+### ⚡ 次期開発優先度
+
+#### 高優先度
+1. **統合ダッシュボード**: ユーザープロファイル + デバイス管理UI
+2. **マイページ**: 個人設定・デバイス一覧・分析結果表示
+3. **データ可視化**: Chart.js による音声分析グラフ
+
+#### 中優先度
+1. **音声データ管理**: アップロード・分析・表示機能
+2. **通知システム**: メール・アプリ内通知
+3. **デバイス管理**: リアルタイム状態監視
+
+この統合アーキテクチャにより、マーケティング→登録→管理→分析の完全なユーザージャーニーが実現されています。
+
+## 📚 関連ドキュメント
+
+- **[REQUIREMENTS_ANALYSIS.md](./REQUIREMENTS_ANALYSIS.md)**: WatchMe要件定義書と現在実装の差異分析
+- **[.env.example](./.env.example)**: 環境変数のサンプル設定
+
+## 🔒 セキュリティガイドライン
+
+### ❗ 重要なセキュリティ要件
+
+1. **時間範囲必須**: すべてのViewerLinkでstart_timeとend_timeは必須
+2. **データアクセス制御**: 許可時間外のデータアクセスを禁止
+3. **リアルタイム検証**: アクセス時に時間範囲を自動検証
+4. **QRコード有効期限**: 24時間制限でセキュリティ強化
+
+### 👀 プライバシー保護
+
+- **音声データ**: 最高レベルの機密性で取り扱い
+- **時間制限アクセス**: 不必要なデータ蔵露を防止
+- **ユーザー同意**: 明示的な時間範囲設定で透明性を確保
+
+## 🤝 貢献ガイドライン
+
+### 💙 開発参加手順
+
+1. **リポジトリフォーク**: このリポジトリをフォーク
+2. **フィーチャーブランチ作成**: `git checkout -b feature/amazing-feature`
+3. **WatchMe要件確認**: REQUIREMENTS_ANALYSIS.mdで系統要件を確認
+4. **コード変更**: コーディングスタンダードに従って実装
+5. **テスト実行**: 新機能の動作確認
+6. **コミット**: `git commit -m 'Add amazing WatchMe feature'`
+7. **プッシュ**: `git push origin feature/amazing-feature`
+8. **プルリクエスト作成**: 詳細な説明とともに提出
+
+### 🏆 優先開発エリア
+
+1. **音声データテーブル実装** (高優先度)
+2. **実際の音声解析エンジン統合** (中優先度)
+3. **モバイルアプリ連携強化** (中優先度)
+4. **高度なグラフ分析機能** (低優先度)
 
 ## 📄 ライセンス
 
 このプロジェクトはMITライセンスの下で公開されています。
+
+---
+
+🎧 **WatchMe**: 音声データから心を読み解く新時代の心理分析システム  
+🚀 **ファストスタート**: `python3 main.py` で今すぐ始められます！

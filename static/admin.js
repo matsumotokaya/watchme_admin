@@ -1,12 +1,15 @@
 /**
- * WatchMe 管理画面 (修正版) JavaScript
- * 実際のSupabaseデータ構造に基づく正しい実装
+ * WatchMe 音声データ心理分析システム JavaScript
+ * WatchMe要件対応: 音声データによる心理・行動・感情の可視化
  */
 
 // グローバル変数
 let currentUsers = [];
 let currentDevices = [];
 let currentViewerLinks = [];
+let currentMyDevices = [];
+let currentUserId = null;
+let mainChart = null; // Chart.jsインスタンス
 
 // DOM要素の取得
 const tabButtons = document.querySelectorAll('.tab-button');
@@ -17,11 +20,12 @@ const notificationArea = document.getElementById('notification-area');
 
 // 初期化
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('WatchMe Admin Fixed - 初期化開始');
+    console.log('WatchMe 音声データ心理分析システム - 初期化開始');
     setupTabs();
     setupEventListeners();
     loadAllData();
     loadStats();
+    initializeDefaultUserSession();
 });
 
 // =============================================================================
@@ -67,6 +71,10 @@ function setupEventListeners() {
     document.getElementById('add-user-btn').addEventListener('click', showAddUserModal);
     document.getElementById('add-device-btn').addEventListener('click', showAddDeviceModal);
     document.getElementById('add-viewer-link-btn').addEventListener('click', showAddViewerLinkModal);
+    
+    // 新しいWatchMe機能のイベントリスナー
+    document.getElementById('refresh-my-devices-btn').addEventListener('click', refreshMyDevices);
+    document.getElementById('load-graph-btn').addEventListener('click', loadGraphData);
     
     // モーダルを閉じる
     modalOverlay.addEventListener('click', function(e) {
@@ -177,17 +185,41 @@ function renderDevicesTable() {
     tbody.innerHTML = '';
     
     if (currentDevices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-gray-500">デバイスがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">デバイスがありません</td></tr>';
         return;
     }
     
     currentDevices.forEach(device => {
+        // デバイス状態の取得
+        const status = device.status || 'active';
+        const statusColors = {
+            'active': 'bg-green-100 text-green-800',
+            'inactive': 'bg-gray-100 text-gray-800', 
+            'syncing': 'bg-blue-100 text-blue-800',
+            'error': 'bg-red-100 text-red-800'
+        };
+        const statusEmojis = {
+            'active': '🟢',
+            'inactive': '⚪',
+            'syncing': '🔄',
+            'error': '🔴'
+        };
+        
         const row = document.createElement('tr');
         row.innerHTML = `
             <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${device.device_id.substring(0, 8)}...</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${device.device_type}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">🎤 ${device.device_type}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 py-1 text-xs rounded-full ${statusColors[status] || statusColors.active}">
+                    ${statusEmojis[status] || statusEmojis.active} ${status.toUpperCase()}
+                </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${device.total_audio_count || 0} 件</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${device.last_sync ? formatDate(device.last_sync) : '未同期'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(device.registered_at)}</td>
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button onclick="generateDeviceQR('${device.device_id}')" class="text-blue-600 hover:text-blue-900 mr-2">QR生成</button>
+                <button onclick="syncDevice('${device.device_id}')" class="text-green-600 hover:text-green-900 mr-2">同期</button>
                 <button onclick="deleteDevice('${device.device_id}')" class="text-red-600 hover:text-red-900">削除</button>
             </td>
         `;
@@ -200,19 +232,29 @@ function renderViewerLinksTable() {
     tbody.innerHTML = '';
     
     if (currentViewerLinks.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">ViewerLinkがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">ViewerLinkがありません</td></tr>';
         return;
     }
     
     currentViewerLinks.forEach(link => {
+        // アクティブ状態の計算
+        const now = new Date();
+        const startTime = link.start_time ? new Date(link.start_time) : null;
+        const endTime = link.end_time ? new Date(link.end_time) : null;
+        const isActive = startTime && endTime && startTime <= now && now <= endTime;
+        
         const row = document.createElement('tr');
         row.innerHTML = `
             <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${link.viewer_link_id.substring(0, 8)}...</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${link.user_name}<br><small class="text-gray-400">${link.user_email}</small></td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${link.device_type}<br><small class="text-gray-400">${link.device_id.substring(0, 8)}...</small></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${link.start_time ? formatDate(link.start_time) : 'N/A'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${link.end_time ? formatDate(link.end_time) : '進行中'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 ${!link.start_time ? 'text-red-500 font-medium' : ''}">${link.start_time ? formatDate(link.start_time) : '⚠️ 未設定'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 ${!link.end_time ? 'text-red-500 font-medium' : ''}">${link.end_time ? formatDate(link.end_time) : '⚠️ 未設定'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 py-1 text-xs rounded-full ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">${isActive ? '🟢 アクティブ' : '⚪ 非アクティブ'}</span>
+            </td>
             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button onclick="generateLinkQR('${link.device_id}')" class="text-blue-600 hover:text-blue-900 mr-2">QR生成</button>
                 <button onclick="deleteViewerLink('${link.viewer_link_id}')" class="text-red-600 hover:text-red-900">削除</button>
             </td>
         `;
@@ -307,9 +349,14 @@ function showAddViewerLinkModal() {
                 </select>
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">終了時間（オプション）</label>
-                <input type="datetime-local" id="viewer-link-end-time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <p class="text-xs text-gray-500 mt-1">空の場合は進行中として作成されます</p>
+                <label class="block text-sm font-medium text-gray-700">開始時間 <span class="text-red-500">*</span></label>
+                <input type="datetime-local" id="viewer-link-start-time" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                <p class="text-xs text-amber-600 mt-1">⚠️ WatchMe要件: 開始時間は必須です</p>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700">終了時間 <span class="text-red-500">*</span></label>
+                <input type="datetime-local" id="viewer-link-end-time" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                <p class="text-xs text-amber-600 mt-1">⚠️ WatchMe要件: 終了時間は必須です</p>
             </div>
             <div class="flex justify-end space-x-3">
                 <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
@@ -372,10 +419,26 @@ async function handleAddDevice(e) {
 async function handleAddViewerLink(e) {
     e.preventDefault();
     
+    const startTime = document.getElementById('viewer-link-start-time').value;
+    const endTime = document.getElementById('viewer-link-end-time').value;
+    
+    // WatchMe要件: start_time, end_timeは必須
+    if (!startTime || !endTime) {
+        showNotification('開始時間と終了時間は必須です', 'error');
+        return;
+    }
+    
+    // 開始時間が終了時間より前であることを確認
+    if (new Date(startTime) >= new Date(endTime)) {
+        showNotification('開始時間は終了時間より前に設定してください', 'error');
+        return;
+    }
+    
     const viewerLinkData = {
         user_id: document.getElementById('viewer-link-user-id').value,
         device_id: document.getElementById('viewer-link-device-id').value,
-        end_time: document.getElementById('viewer-link-end-time').value || null
+        start_time: startTime,
+        end_time: endTime
     };
     
     try {
@@ -462,5 +525,408 @@ function showNotification(message, type = 'info') {
     }, 5000);
 }
 
+// =============================================================================
+// WatchMe新機能: 自分のデバイス一覧管理
+// =============================================================================
+
+function initializeDefaultUserSession() {
+    // デフォルトユーザーIDを設定（実際のアプリではログイン機能から取得）
+    const userIdInput = document.getElementById('user-id-input');
+    if (userIdInput && currentUsers.length > 0) {
+        currentUserId = currentUsers[0].user_id;
+        userIdInput.value = currentUserId;
+    }
+}
+
+async function refreshMyDevices() {
+    const userIdInput = document.getElementById('user-id-input');
+    const userId = userIdInput.value.trim();
+    
+    if (!userId) {
+        showNotification('ユーザーIDを入力してください', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await axios.get(`/api/my-devices?user_id=${userId}`);
+        currentMyDevices = response.data;
+        currentUserId = userId;
+        renderMyDevicesGrid();
+        updateGraphDeviceSelect();
+        showNotification(`${currentMyDevices.length} 個のデバイスが見つかりました`, 'success');
+    } catch (error) {
+        console.error('自分のデバイス取得エラー:', error);
+        showNotification('デバイス一覧の取得に失敗しました', 'error');
+        currentMyDevices = [];
+        renderMyDevicesGrid();
+    }
+}
+
+function renderMyDevicesGrid() {
+    const grid = document.getElementById('my-devices-grid');
+    grid.innerHTML = '';
+    
+    if (currentMyDevices.length === 0) {
+        grid.innerHTML = `
+            <div class="col-span-full text-center py-12">
+                <div class="text-gray-400 text-6xl mb-4">📱</div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">デバイスが見つかりません</h3>
+                <p class="text-gray-500">ユーザーIDを確認するか、ViewerLinkを作成してください</p>
+            </div>
+        `;
+        return;
+    }
+    
+    currentMyDevices.forEach(device => {
+        const card = document.createElement('div');
+        card.className = `bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow ${device.is_active ? 'border-green-200 bg-green-50' : 'border-gray-200'}`;
+        
+        const statusIcon = device.is_active ? '🟢' : '⚪';
+        const statusText = device.is_active ? 'アクティブ' : '非アクティブ';
+        const statusColor = device.is_active ? 'text-green-600' : 'text-gray-500';
+        
+        card.innerHTML = `
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center">
+                    <div class="text-2xl mr-3">🎤</div>
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900">${device.device_type}</h3>
+                        <p class="text-sm text-gray-500">${device.device_id.substring(0, 8)}...</p>
+                    </div>
+                </div>
+                <span class="px-2 py-1 text-xs rounded-full ${device.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                    ${statusIcon} ${statusText}
+                </span>
+            </div>
+            
+            <div class="space-y-2 mb-4">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">音声データ数:</span>
+                    <span class="font-medium">${device.total_audio_count} 件</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">最終同期:</span>
+                    <span class="font-medium">${device.last_sync ? formatDate(device.last_sync) : '未同期'}</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">閲覧期間:</span>
+                    <span class="font-medium text-xs">${formatDate(device.start_time)} 〜 ${formatDate(device.end_time)}</span>
+                </div>
+            </div>
+            
+            <div class="flex space-x-2">
+                <button onclick="viewDeviceGraphs('${device.device_id}')" 
+                        class="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 ${!device.is_active ? 'opacity-50 cursor-not-allowed' : ''}"
+                        ${!device.is_active ? 'disabled' : ''}>
+                    📊 グラフ表示
+                </button>
+                <button onclick="generateDeviceQR('${device.device_id}')" 
+                        class="px-3 py-2 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                    📱 QR
+                </button>
+            </div>
+        `;
+        
+        grid.appendChild(card);
+    });
+}
+
+function updateGraphDeviceSelect() {
+    const select = document.getElementById('graph-device-select');
+    select.innerHTML = '<option value="">デバイス選択</option>';
+    
+    currentMyDevices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.device_id;
+        option.textContent = `${device.device_type} (${device.device_id.substring(0, 8)}...)`;
+        if (device.is_active) {
+            option.textContent += ' ✓';
+        }
+        select.appendChild(option);
+    });
+}
+
+function viewDeviceGraphs(deviceId) {
+    switchTab('graphs');
+    const select = document.getElementById('graph-device-select');
+    select.value = deviceId;
+    
+    // デフォルトの時間範囲を設定（過去24時間）
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    document.getElementById('graph-end-time').value = now.toISOString().slice(0, 16);
+    document.getElementById('graph-start-time').value = yesterday.toISOString().slice(0, 16);
+    
+    showNotification(`デバイス ${deviceId.substring(0, 8)}... のグラフ表示画面に移動しました`, 'info');
+}
+
+// =============================================================================
+// WatchMe新機能: グラフ表示機能
+// =============================================================================
+
+async function loadGraphData() {
+    const deviceId = document.getElementById('graph-device-select').value;
+    const graphType = document.getElementById('graph-type-select').value;
+    const startTime = document.getElementById('graph-start-time').value;
+    const endTime = document.getElementById('graph-end-time').value;
+    
+    if (!deviceId) {
+        showNotification('デバイスを選択してください', 'warning');
+        return;
+    }
+    
+    if (!startTime || !endTime) {
+        showNotification('開始時間と終了時間を設定してください', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await axios.get(`/api/devices/${deviceId}/graphs`, {
+            params: {
+                start_time: startTime,
+                end_time: endTime,
+                graph_type: graphType
+            }
+        });
+        
+        const graphData = response.data;
+        renderMainGraph(graphData);
+        updateGraphSummary(graphData);
+        showNotification('グラフデータを読み込みました', 'success');
+    } catch (error) {
+        console.error('グラフデータ取得エラー:', error);
+        showNotification('グラフデータの取得に失敗しました', 'error');
+        renderEmptyGraph();
+    }
+}
+
+function renderMainGraph(graphData) {
+    const canvas = document.getElementById('main-graph-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 既存のチャートを破棄
+    if (mainChart) {
+        mainChart.destroy();
+    }
+    
+    // サンプルデータ（実際のAPIからのデータが空の場合）
+    const sampleData = generateSampleGraphData(graphData.graph_type || 'emotion');
+    
+    mainChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: sampleData.labels,
+            datasets: [{
+                label: getGraphTypeLabel(graphData.graph_type || 'emotion'),
+                data: sampleData.data,
+                borderColor: getGraphTypeColor(graphData.graph_type || 'emotion'),
+                backgroundColor: getGraphTypeColor(graphData.graph_type || 'emotion', 0.1),
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `${getGraphTypeLabel(graphData.graph_type || 'emotion')} - ${formatDate(graphData.time_range_start)} 〜 ${formatDate(graphData.time_range_end)}`
+                },
+                legend: {
+                    display: true
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: 'スコア (%)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: '時間'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function generateSampleGraphData(graphType) {
+    const now = new Date();
+    const labels = [];
+    const data = [];
+    
+    // 過去24時間のサンプルデータを生成
+    for (let i = 23; i >= 0; i--) {
+        const time = new Date(now.getTime() - i * 60 * 60 * 1000);
+        labels.push(time.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }));
+        
+        // グラフタイプに応じたサンプルデータ
+        let value;
+        switch (graphType) {
+            case 'emotion':
+                value = 60 + Math.sin(i * 0.5) * 20 + Math.random() * 10;
+                break;
+            case 'behavior':
+                value = 40 + Math.cos(i * 0.3) * 25 + Math.random() * 15;
+                break;
+            case 'psychology':
+                value = 70 + Math.sin(i * 0.2) * 15 + Math.random() * 8;
+                break;
+            default:
+                value = 50 + Math.random() * 30;
+        }
+        data.push(Math.max(0, Math.min(100, value)));
+    }
+    
+    return { labels, data };
+}
+
+function getGraphTypeLabel(graphType) {
+    const labels = {
+        'emotion': '😊 感情スコア',
+        'behavior': '🚶 行動パターン',
+        'psychology': '🧠 心理状態'
+    };
+    return labels[graphType] || '📊 分析データ';
+}
+
+function getGraphTypeColor(graphType, alpha = 1) {
+    const colors = {
+        'emotion': `rgba(59, 130, 246, ${alpha})`, // blue
+        'behavior': `rgba(16, 185, 129, ${alpha})`, // green  
+        'psychology': `rgba(139, 92, 246, ${alpha})` // purple
+    };
+    return colors[graphType] || `rgba(107, 114, 128, ${alpha})`;
+}
+
+function updateGraphSummary(graphData) {
+    const summaryDiv = document.getElementById('graph-summary');
+    const graphType = graphData.graph_type || 'emotion';
+    const deviceType = graphData.device_type || 'Unknown';
+    
+    summaryDiv.innerHTML = `
+        <div class="space-y-3">
+            <div class="flex justify-between">
+                <span class="text-gray-600">デバイス:</span>
+                <span class="font-medium">🎤 ${deviceType}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-600">分析タイプ:</span>
+                <span class="font-medium">${getGraphTypeLabel(graphType)}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-600">データ期間:</span>
+                <span class="font-medium text-xs">${formatDate(graphData.time_range_start)} 〜 ${formatDate(graphData.time_range_end)}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-600">グラフ数:</span>
+                <span class="font-medium">${graphData.graphs?.length || 0} 個</span>
+            </div>
+            <div class="mt-4 p-3 bg-blue-50 rounded-md">
+                <p class="text-sm text-blue-700">
+                    <strong>📍 注意:</strong> 実際の音声データ解析機能は実装中です。現在はサンプルデータを表示しています。
+                </p>
+            </div>
+        </div>
+    `;
+}
+
+function renderEmptyGraph() {
+    const summaryDiv = document.getElementById('graph-summary');
+    summaryDiv.innerHTML = `
+        <div class="text-center py-8">
+            <div class="text-gray-400 text-4xl mb-4">📊</div>
+            <p class="text-gray-500">グラフデータがありません</p>
+            <p class="text-sm text-gray-400 mt-2">デバイスと時間範囲を選択してください</p>
+        </div>
+    `;
+    
+    if (mainChart) {
+        mainChart.destroy();
+        mainChart = null;
+    }
+}
+
+// =============================================================================
+// WatchMe新機能: QRコード・デバイス操作
+// =============================================================================
+
+async function generateDeviceQR(deviceId) {
+    try {
+        const response = await axios.get(`/api/devices/${deviceId}/qr`);
+        const qrData = response.data;
+        
+        showQRModal(qrData);
+        showNotification('QRコードを生成しました', 'success');
+    } catch (error) {
+        console.error('QRコード生成エラー:', error);
+        showNotification('QRコードの生成に失敗しました', 'error');
+    }
+}
+
+async function generateLinkQR(deviceId) {
+    // ViewerLink用のQRコード生成（generateDeviceQRと同じ処理）
+    await generateDeviceQR(deviceId);
+}
+
+function showQRModal(qrData) {
+    modalContent.innerHTML = `
+        <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900">📱 デバイスQRコード</h3>
+            <p class="text-sm text-gray-500 mt-1">デバイス: ${qrData.device_id.substring(0, 8)}...</p>
+        </div>
+        <div class="text-center mb-4">
+            <canvas id="qr-canvas" class="mx-auto border rounded-lg"></canvas>
+        </div>
+        <div class="text-center mb-4">
+            <p class="text-xs text-gray-500">QRコードデータ: ${qrData.qr_code_data.substring(0, 20)}...</p>
+            <p class="text-xs text-gray-400 mt-1">有効期限: ${qrData.expires_at ? formatDate(qrData.expires_at) : '無期限'}</p>
+        </div>
+        <div class="flex justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                閉じる
+            </button>
+        </div>
+    `;
+    
+    // QRコードを生成
+    const canvas = document.getElementById('qr-canvas');
+    QRCode.toCanvas(canvas, qrData.qr_code_data, {
+        width: 200,
+        margin: 2,
+        color: {
+            dark: '#1f2937',
+            light: '#ffffff'
+        }
+    }, function (error) {
+        if (error) {
+            console.error('QRコード描画エラー:', error);
+            canvas.innerHTML = '<p class="text-red-500">QRコードの表示に失敗しました</p>';
+        }
+    });
+    
+    modalOverlay.classList.remove('hidden');
+}
+
+async function syncDevice(deviceId) {
+    try {
+        const response = await axios.put(`/api/devices/${deviceId}/sync`);
+        await loadDevices(); // デバイス一覧を再読み込み
+        await loadStats(); // 統計情報を更新
+        showNotification('デバイスの同期が完了しました', 'success');
+    } catch (error) {
+        console.error('デバイス同期エラー:', error);
+        showNotification('デバイスの同期に失敗しました', 'error');
+    }
+}
+
 // デバッグ用
-console.log('WatchMe Admin Fixed JavaScript 読み込み完了');
+console.log('WatchMe 音声データ心理分析システム JavaScript 読み込み完了');
