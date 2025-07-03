@@ -164,20 +164,40 @@ function renderUsersTable() {
     tbody.innerHTML = '';
     
     if (currentUsers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">ユーザーがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-4 text-center text-gray-500">ユーザーがありません</td></tr>';
         return;
     }
     
     currentUsers.forEach(user => {
         const row = document.createElement('tr');
+        
+        // ステータス表示のスタイリング
+        const statusColor = getStatusColor(user.status);
+        const statusBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor}">${getStatusLabel(user.status)}</span>`;
+        
+        // プラン表示
+        const planDisplay = user.subscription_plan ? 
+            `<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">${getPlanLabel(user.subscription_plan)}</span>` : 
+            '<span class="text-gray-400">-</span>';
+        
+        // ニュースレター購読表示
+        const newsletterDisplay = user.newsletter_subscription ? 
+            '<span class="text-green-600">✓ 購読中</span>' : 
+            '<span class="text-gray-400">-</span>';
+        
         row.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${user.user_id.substring(0, 8)}...</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${user.name}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${user.email}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(user.created_at)}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onclick="viewUserLinks('${user.user_id}')" class="text-blue-600 hover:text-blue-900 mr-3">リンク表示</button>
-                <button onclick="deleteUser('${user.user_id}')" class="text-red-600 hover:text-red-900">削除</button>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title="${user.user_id}">${user.user_id.substring(0, 8)}...</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${user.name || '<span class="text-gray-400">未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${user.email || '<span class="text-gray-400">未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${statusBadge}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${planDisplay}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${newsletterDisplay}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(user.created_at)}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${user.updated_at ? formatDate(user.updated_at) : '<span class="text-gray-400">-</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button onclick="viewUserDetails('${user.user_id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="詳細表示">👁️</button>
+                <button onclick="editUser('${user.user_id}')" class="text-green-600 hover:text-green-900 mr-2" title="編集">✏️</button>
+                <button onclick="deleteUser('${user.user_id}')" class="text-red-600 hover:text-red-900" title="削除">🗑️</button>
             </td>
         `;
         tbody.appendChild(row);
@@ -930,6 +950,116 @@ async function syncDevice(deviceId) {
         console.error('デバイス同期エラー:', error);
         showNotification('デバイスの同期に失敗しました', 'error');
     }
+}
+
+// =============================================================================
+// ユーザー管理用ヘルパー関数
+// =============================================================================
+
+function getStatusColor(status) {
+    switch (status) {
+        case 'guest':
+            return 'bg-gray-100 text-gray-800';
+        case 'member':
+            return 'bg-blue-100 text-blue-800';
+        case 'subscriber':
+            return 'bg-green-100 text-green-800';
+        default:
+            return 'bg-gray-100 text-gray-800';
+    }
+}
+
+function getStatusLabel(status) {
+    switch (status) {
+        case 'guest':
+            return '👤 ゲスト';
+        case 'member':
+            return '👥 会員';
+        case 'subscriber':
+            return '⭐ サブスクライバー';
+        default:
+            return status;
+    }
+}
+
+function getPlanLabel(plan) {
+    switch (plan) {
+        case 'basic':
+            return '🟢 ベーシック';
+        case 'premium':
+            return '🟡 プレミアム';
+        case 'enterprise':
+            return '🔴 エンタープライズ';
+        default:
+            return plan;
+    }
+}
+
+// ユーザー詳細表示
+function viewUserDetails(userId) {
+    const user = currentUsers.find(u => u.user_id === userId);
+    if (!user) {
+        showNotification('ユーザーが見つかりません', 'error');
+        return;
+    }
+    
+    modalContent.innerHTML = `
+        <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900">👤 ユーザー詳細</h3>
+        </div>
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">ユーザーID</label>
+                    <div class="mt-1 text-sm text-gray-900 font-mono bg-gray-50 p-2 rounded">${user.user_id}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">名前</label>
+                    <div class="mt-1 text-sm text-gray-900">${user.name || '未設定'}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">メールアドレス</label>
+                    <div class="mt-1 text-sm text-gray-900">${user.email || '未設定'}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">ステータス</label>
+                    <div class="mt-1">${getStatusLabel(user.status)}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">サブスクリプションプラン</label>
+                    <div class="mt-1">${user.subscription_plan ? getPlanLabel(user.subscription_plan) : '未設定'}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">ニュースレター購読</label>
+                    <div class="mt-1">${user.newsletter_subscription ? '✓ 購読中' : '購読なし'}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">登録日時</label>
+                    <div class="mt-1 text-sm text-gray-900">${formatDate(user.created_at)}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">更新日時</label>
+                    <div class="mt-1 text-sm text-gray-900">${user.updated_at ? formatDate(user.updated_at) : '未更新'}</div>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end mt-6 space-x-3">
+            <button onclick="editUser('${user.user_id}')" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
+                編集
+            </button>
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                閉じる
+            </button>
+        </div>
+    `;
+    
+    modalOverlay.classList.remove('hidden');
+}
+
+// ユーザー編集（プレースホルダー）
+function editUser(userId) {
+    showNotification('ユーザー編集機能は今後実装予定です', 'info');
+    closeModal();
 }
 
 // デバッグ用
