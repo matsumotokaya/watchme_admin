@@ -22,7 +22,11 @@ from models.schemas import (
     DeviceSession, DeviceSessionCreate, DeviceSessionUpdate,
     MyDeviceInfo, GraphSummary, DeviceGraphsResponse,
     QRCodeResponse, DeviceLinkRequest, StatsResponse,
-    DeviceUpdate, DeviceStatus, GraphType, SessionStatus
+    DeviceUpdate, DeviceStatus, GraphType, SessionStatus,
+    # 新しいユーザーステータス関連
+    UserStatus, SubscriptionPlan, PlatformType,
+    GuestUserCreate, UserUpgradeToMember, UserStatusUpdate,
+    VirtualMobileDeviceCreate
 )
 
 app = FastAPI(title="WatchMe Admin (Fixed)", description="修正済みWatchMe管理画面API", version="2.0.0")
@@ -668,6 +672,157 @@ async def get_stats():
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"統計情報の取得に失敗しました: {str(e)}")
+
+
+# =============================================================================
+# ユーザーステータス管理API（新仕様対応）
+# =============================================================================
+
+@app.post("/api/users/guest", response_model=User)
+async def create_guest_user(guest_data: GuestUserCreate):
+    """ゲストユーザーを作成（Auth不要）"""
+    try:
+        # ゲストユーザーの作成
+        user_data = {
+            "id": str(uuid.uuid4()),
+            "name": guest_data.name,
+            "status": guest_data.status.value,
+            "created_at": datetime.now().isoformat()
+        }
+        
+        result = await supabase_client.insert("users", user_data)
+        if not result:
+            raise HTTPException(status_code=500, detail="ゲストユーザーの作成に失敗しました")
+        
+        return User(**result[0])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ゲストユーザー作成に失敗しました: {str(e)}")
+
+
+@app.post("/api/users/{user_id}/upgrade", response_model=User)
+async def upgrade_guest_to_member(user_id: str, upgrade_data: UserUpgradeToMember):
+    """ゲストユーザーを会員にアップグレード"""
+    try:
+        # 既存ユーザーの確認
+        existing_user = await supabase_client.select("users", filters={"id": user_id})
+        if not existing_user:
+            raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+        
+        if existing_user[0].get("status") != UserStatus.GUEST:
+            raise HTTPException(status_code=400, detail="ゲストユーザーのみアップグレード可能です")
+        
+        # ユーザー情報を更新
+        update_data = {
+            "user_id": upgrade_data.user_id,
+            "name": upgrade_data.name,
+            "email": upgrade_data.email,
+            "status": UserStatus.MEMBER.value,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        result = await supabase_client.update("users", user_id, update_data)
+        if not result:
+            raise HTTPException(status_code=500, detail="ユーザーアップグレードに失敗しました")
+        
+        return User(**result[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"アップグレードに失敗しました: {str(e)}")
+
+
+@app.put("/api/users/{user_id}/status", response_model=User)
+async def update_user_status(user_id: str, status_data: UserStatusUpdate):
+    """ユーザーステータスを更新（サブスク加入など）"""
+    try:
+        # 既存ユーザーの確認
+        existing_user = await supabase_client.select("users", filters={"id": user_id})
+        if not existing_user:
+            raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
+        
+        # ステータス更新
+        update_data = {
+            "status": status_data.status.value,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        if status_data.subscription_plan:
+            update_data["subscription_plan"] = status_data.subscription_plan.value
+        
+        result = await supabase_client.update("users", user_id, update_data)
+        if not result:
+            raise HTTPException(status_code=500, detail="ステータス更新に失敗しました")
+        
+        return User(**result[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ステータス更新に失敗しました: {str(e)}")
+
+
+@app.post("/api/devices/virtual-mobile", response_model=Device)
+async def create_virtual_mobile_device(device_data: VirtualMobileDeviceCreate):
+    """スマホ仮想デバイスを作成"""
+    try:
+        # 既存デバイスの重複チェック（platform_identifierで）
+        existing_devices = await supabase_client.select("devices", filters={
+            "platform_identifier": device_data.platform_identifier
+        })
+        
+        if existing_devices:
+            # 既存デバイスが見つかった場合、オーナーを更新
+            device_id = existing_devices[0]["device_id"]
+            update_data = {
+                "owner_user_id": device_data.owner_user_id,
+                "status": device_data.status.value,
+                "updated_at": datetime.now().isoformat()
+            }
+            result = await supabase_client.update("devices", device_id, update_data, "device_id")
+            return Device(**result[0])
+        
+        # 新規デバイス作成
+        device_uuid = str(uuid.uuid4())
+        new_device = {
+            "device_id": device_uuid,
+            "owner_user_id": device_data.owner_user_id,
+            "device_type": device_data.device_type,
+            "platform_type": device_data.platform_type.value,
+            "platform_identifier": device_data.platform_identifier,
+            "status": device_data.status.value,
+            "registered_at": datetime.now().isoformat(),
+            "total_audio_count": 0
+        }
+        
+        result = await supabase_client.insert("devices", new_device)
+        if not result:
+            raise HTTPException(status_code=500, detail="仮想デバイス作成に失敗しました")
+        
+        return Device(**result[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"仮想デバイス作成に失敗しました: {str(e)}")
+
+
+@app.get("/api/users/{user_id}/devices", response_model=List[Device])
+async def get_user_devices(user_id: str):
+    """ユーザーのデバイス一覧を取得（新仕様）"""
+    try:
+        # owner_user_idでデバイスを検索
+        devices = await supabase_client.select("devices", filters={"owner_user_id": user_id})
+        return [Device(**device) for device in devices]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"デバイス一覧取得に失敗しました: {str(e)}")
+
+
+@app.get("/api/users/by-status/{status}", response_model=List[User])
+async def get_users_by_status(status: UserStatus):
+    """ステータス別ユーザー一覧を取得"""
+    try:
+        users = await supabase_client.select("users", filters={"status": status.value})
+        return [User(**user) for user in users]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ユーザー一覧取得に失敗しました: {str(e)}")
 
 
 # =============================================================================

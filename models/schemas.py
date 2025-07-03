@@ -13,6 +13,21 @@ from enum import Enum
 # Enums - システムで使用する定数
 # =============================================================================
 
+class UserStatus(str, Enum):
+    GUEST = "guest"
+    MEMBER = "member"
+    SUBSCRIBER = "subscriber"
+
+class SubscriptionPlan(str, Enum):
+    BASIC = "basic"
+    PREMIUM = "premium"
+    ENTERPRISE = "enterprise"
+
+class PlatformType(str, Enum):
+    IOS = "iOS"
+    ANDROID = "Android"
+    WEB = "Web"
+
 class DeviceStatus(str, Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
@@ -37,16 +52,39 @@ class SessionStatus(str, Enum):
 
 class UserBase(BaseModel):
     name: str
-    email: str
+    email: Optional[str] = None
+    status: UserStatus = UserStatus.GUEST
+    subscription_plan: Optional[SubscriptionPlan] = None
 
 
 class UserCreate(UserBase):
     pass
 
 
+class GuestUserCreate(BaseModel):
+    """ゲストユーザー作成用（Auth不要）"""
+    name: str = "ゲスト"
+    status: UserStatus = UserStatus.GUEST
+
+
+class UserUpgradeToMember(BaseModel):
+    """ゲストから会員への昇格用"""
+    name: str
+    email: str
+    user_id: str  # auth.usersのid
+
+
+class UserStatusUpdate(BaseModel):
+    """ユーザーステータス変更用"""
+    status: UserStatus
+    subscription_plan: Optional[SubscriptionPlan] = None
+
+
 class User(UserBase):
-    user_id: str
+    id: str
+    user_id: Optional[str] = None  # auth.usersとの連携（member以上のみ）
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -60,10 +98,21 @@ class User(UserBase):
 class DeviceBase(BaseModel):
     device_type: str
     status: Optional[DeviceStatus] = DeviceStatus.ACTIVE
+    platform_type: Optional[PlatformType] = None
+    platform_identifier: Optional[str] = None
 
 
 class DeviceCreate(DeviceBase):
-    pass
+    owner_user_id: str  # users.idと連携
+
+
+class VirtualMobileDeviceCreate(BaseModel):
+    """スマホ仮想デバイス作成用"""
+    owner_user_id: str
+    device_type: str = "virtual_mobile"
+    platform_type: PlatformType
+    platform_identifier: str  # iOS: identifierForVendor, Android: ANDROID_ID
+    status: DeviceStatus = DeviceStatus.ACTIVE
 
 
 class DeviceUpdate(BaseModel):
@@ -74,6 +123,7 @@ class DeviceUpdate(BaseModel):
 
 class Device(DeviceBase):
     device_id: str
+    owner_user_id: Optional[str] = None  # オプショナルに変更
     registered_at: datetime
     last_sync: Optional[datetime] = None
     total_audio_count: int = 0

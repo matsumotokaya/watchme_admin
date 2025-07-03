@@ -117,13 +117,17 @@ async function loadUsers() {
 
 async function loadDevices() {
     try {
+        console.log('デバイスAPI呼び出し開始');
         const response = await axios.get('/api/devices');
+        console.log('デバイスAPIレスポンス:', response.data);
         currentDevices = response.data;
         renderDevicesTable();
         console.log(`デバイス ${currentDevices.length} 件読み込み完了`);
     } catch (error) {
-        console.error('デバイス読み込みエラー:', error);
-        showNotification('デバイスの読み込みに失敗しました', 'error');
+        console.error('デバイス読み込みエラー詳細:', error);
+        console.error('エラーレスポンス:', error.response?.data);
+        console.error('エラーステータス:', error.response?.status);
+        showNotification('デバイスの読み込みに失敗しました: ' + (error.response?.data?.detail || error.message), 'error');
     }
 }
 

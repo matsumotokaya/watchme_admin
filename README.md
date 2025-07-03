@@ -145,6 +145,22 @@ SUPABASE_KEY=your-anon-key
 
 ### 5. サーバーの起動
 
+#### 🚀 簡単起動（推奨）
+```bash
+# 起動
+./start.sh
+
+# 停止  
+./stop.sh
+
+# 再起動
+./restart.sh
+
+# 状態確認
+./status.sh
+```
+
+#### ⚙️ 手動起動
 ```bash
 python3 main.py
 ```
@@ -346,6 +362,14 @@ open http://localhost:9000
 
 ### 📋 開発マイルストーン
 
+- **v3.2 (2025-07-03)** - ユーザーステータス管理システム完全実装
+  - 📱 ゲスト→会員→サブスクユーザーの段階的ステータス管理
+  - 🎯 アプリUX仕様書完全対応（no login → guest → member → subscriber）
+  - 📱 スマホ仮想デバイス自動登録システム（iOS/Android対応）
+  - 🗄️ データベース構造完全対応（owner_user_id連携システム）
+  - 🔧 Auth不要ゲストユーザー作成API実装
+  - ⚡ 管理画面API・UI完全対応
+
 - **v3.1 (2025-07-02)** - ユーザー認証システム完全統合
   - 🔐 マーケティングサイト認証連携
   - 🗄️ auth.users + public.users 統合データベース
@@ -482,6 +506,28 @@ const userDashboard = {
 - **RLS（Row Level Security）**: すべてのテーブルで auth.uid() = user_id 制限
 - **時間範囲制御**: viewer_links での厳密なアクセス制御
 - **デバイス認証**: QRコード・デバイスIDによる安全な連携
+- **ゲストユーザー**: Auth不要だが一意性は保証（UUID）
+
+### 🔄 ユーザーステータス管理システム
+
+#### 📋 ユーザーステータス遷移
+```
+no login → guest → member → subscriber
+```
+
+#### 🎯 主要API追加
+- **POST /api/users/guest**: ゲストユーザー作成（Auth不要）
+- **POST /api/users/{user_id}/upgrade**: ゲスト→会員アップグレード
+- **PUT /api/users/{user_id}/status**: ステータス更新（サブスク加入等）
+- **POST /api/devices/virtual-mobile**: スマホ仮想デバイス作成
+- **GET /api/users/{user_id}/devices**: ユーザーのデバイス一覧（新仕様）
+- **GET /api/users/by-status/{status}**: ステータス別ユーザー一覧
+
+#### 📱 スマホ仮想デバイス対応
+- **iOS**: identifierForVendor 使用
+- **Android**: ANDROID_ID 使用  
+- **重複管理**: platform_identifier で一意性保証
+- **所有者更新**: 既存デバイスのオーナー変更対応
 
 ### 🔧 開発環境設定
 
