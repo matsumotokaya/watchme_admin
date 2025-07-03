@@ -63,6 +63,7 @@ class UserCreate(UserBase):
 
 class GuestUserCreate(BaseModel):
     """ゲストユーザー作成用（Auth不要）"""
+    user_id: str  # auth.users.idを指定
     name: str = "ゲスト"
     status: UserStatus = UserStatus.GUEST
 
@@ -81,8 +82,7 @@ class UserStatusUpdate(BaseModel):
 
 
 class User(UserBase):
-    id: str
-    user_id: Optional[str] = None  # auth.usersとの連携（member以上のみ）
+    user_id: str  # 主キー（auth.users.idと同じ）
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -103,7 +103,7 @@ class DeviceBase(BaseModel):
 
 
 class DeviceCreate(DeviceBase):
-    owner_user_id: str  # users.idと連携
+    owner_user_id: str  # users.user_idと連携
 
 
 class VirtualMobileDeviceCreate(BaseModel):

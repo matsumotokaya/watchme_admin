@@ -44,14 +44,21 @@ FastAPIとSupabaseを使用したマルチデバイス・レンジ管理型閲�
 ## 📊 データベース構造
 
 ### users テーブル
-- `user_id` (UUID, Primary Key)
+- `user_id` (UUID, Primary Key, auth.users.id外部キー)
 - `name` (String)
-- `email` (String)
+- `email` (String, Optional)
+- `status` (String) - 'guest', 'member', 'subscriber'
+- `subscription_plan` (String, Optional) - 'basic', 'premium', 'enterprise'
+- `newsletter_subscription` (Boolean)
 - `created_at` (DateTime)
+- `updated_at` (DateTime, Optional)
 
 ### devices テーブル - 音声取得デバイス
 - `device_id` (UUID, Primary Key)
+- `owner_user_id` (UUID, Optional, users.user_id外部キー)
 - `device_type` (String) - デバイス種別
+- `platform_type` (String, Optional) - 'iOS', 'Android', 'Web'
+- `platform_identifier` (String, Optional) - プラットフォーム固有ID
 - `status` (String) - デバイス状態 (active/inactive/syncing/error)
 - `registered_at` (DateTime) - 登録日時
 - `last_sync` (DateTime, Optional) - 最終同期時刻
@@ -60,8 +67,9 @@ FastAPIとSupabaseを使用したマルチデバイス・レンジ管理型閲�
 
 ### viewer_links テーブル - 時間範囲制限付き関連付け
 - `viewer_link_id` (UUID, Primary Key)
-- `user_id` (UUID, Foreign Key)
-- `device_id` (UUID, Foreign Key)
+- `user_id` (UUID, users.user_id外部キー)
+- `device_id` (UUID, devices.device_id外部キー)
+- `owner_user_id` (UUID, Optional, users.user_id外部キー)
 - `start_time` (DateTime, **必須**) - 閲覧開始時刻
 - `end_time` (DateTime, **必須**) - 閲覧終了時刻
 
@@ -361,6 +369,13 @@ open http://localhost:9000
 ## 🕰️ WatchMeシステムの進化
 
 ### 📋 開発マイルストーン
+
+- **v3.3 (2025-07-03)** - データベーススキーマ完全最適化
+  - 🗄️ users.user_id 主キー化完了（auth.users.id直接参照）
+  - 🔗 auth.users との完全統合（外部キー制約設定）
+  - 🧹 不要な users.id カラム削除によるスキーマ簡素化
+  - ✅ 全外部キー関係の整合性確保
+  - 📊 パフォーマンス最適化インデックス追加
 
 - **v3.2 (2025-07-03)** - ユーザーステータス管理システム完全実装
   - 📱 ゲスト→会員→サブスクユーザーの段階的ステータス管理

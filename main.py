@@ -684,7 +684,7 @@ async def create_guest_user(guest_data: GuestUserCreate):
     try:
         # ゲストユーザーの作成
         user_data = {
-            "id": str(uuid.uuid4()),
+            "user_id": guest_data.user_id,
             "name": guest_data.name,
             "status": guest_data.status.value,
             "created_at": datetime.now().isoformat()
@@ -704,7 +704,7 @@ async def upgrade_guest_to_member(user_id: str, upgrade_data: UserUpgradeToMembe
     """ゲストユーザーを会員にアップグレード"""
     try:
         # 既存ユーザーの確認
-        existing_user = await supabase_client.select("users", filters={"id": user_id})
+        existing_user = await supabase_client.select("users", filters={"user_id": user_id})
         if not existing_user:
             raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
         
@@ -713,14 +713,13 @@ async def upgrade_guest_to_member(user_id: str, upgrade_data: UserUpgradeToMembe
         
         # ユーザー情報を更新
         update_data = {
-            "user_id": upgrade_data.user_id,
             "name": upgrade_data.name,
             "email": upgrade_data.email,
             "status": UserStatus.MEMBER.value,
             "updated_at": datetime.now().isoformat()
         }
         
-        result = await supabase_client.update("users", user_id, update_data)
+        result = await supabase_client.update("users", update_data, {"user_id": user_id})
         if not result:
             raise HTTPException(status_code=500, detail="ユーザーアップグレードに失敗しました")
         
@@ -736,7 +735,7 @@ async def update_user_status(user_id: str, status_data: UserStatusUpdate):
     """ユーザーステータスを更新（サブスク加入など）"""
     try:
         # 既存ユーザーの確認
-        existing_user = await supabase_client.select("users", filters={"id": user_id})
+        existing_user = await supabase_client.select("users", filters={"user_id": user_id})
         if not existing_user:
             raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
         
@@ -749,7 +748,7 @@ async def update_user_status(user_id: str, status_data: UserStatusUpdate):
         if status_data.subscription_plan:
             update_data["subscription_plan"] = status_data.subscription_plan.value
         
-        result = await supabase_client.update("users", user_id, update_data)
+        result = await supabase_client.update("users", update_data, {"user_id": user_id})
         if not result:
             raise HTTPException(status_code=500, detail="ステータス更新に失敗しました")
         
@@ -777,7 +776,7 @@ async def create_virtual_mobile_device(device_data: VirtualMobileDeviceCreate):
                 "status": device_data.status.value,
                 "updated_at": datetime.now().isoformat()
             }
-            result = await supabase_client.update("devices", device_id, update_data, "device_id")
+            result = await supabase_client.update("devices", update_data, {"device_id": device_id})
             return Device(**result[0])
         
         # 新規デバイス作成
