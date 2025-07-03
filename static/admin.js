@@ -209,7 +209,7 @@ function renderDevicesTable() {
     tbody.innerHTML = '';
     
     if (currentDevices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">デバイスがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">デバイスがありません</td></tr>';
         return;
     }
     
@@ -231,20 +231,24 @@ function renderDevicesTable() {
         
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${device.device_id.substring(0, 8)}...</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">🎤 ${device.device_type}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title="${device.device_id}">${device.device_id.substring(0, 8)}...</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${device.device_type || '-'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500" title="${device.owner_user_id || ''}">${device.owner_user_id ? device.owner_user_id.substring(0, 8) + '...' : '<span class="text-gray-400">未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${device.platform_type || '<span class="text-gray-400">-</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${device.platform_identifier || '<span class="text-gray-400">-</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">
                 <span class="px-2 py-1 text-xs rounded-full ${statusColors[status] || statusColors.active}">
-                    ${statusEmojis[status] || statusEmojis.active} ${status.toUpperCase()}
+                    ${statusEmojis[status] || statusEmojis.active} ${status}
                 </span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${device.total_audio_count || 0} 件</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${device.last_sync ? formatDate(device.last_sync) : '未同期'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(device.registered_at)}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onclick="generateDeviceQR('${device.device_id}')" class="text-blue-600 hover:text-blue-900 mr-2">QR生成</button>
-                <button onclick="syncDevice('${device.device_id}')" class="text-green-600 hover:text-green-900 mr-2">同期</button>
-                <button onclick="deleteDevice('${device.device_id}')" class="text-red-600 hover:text-red-900">削除</button>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${device.total_audio_count || 0}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${device.last_sync ? formatDate(device.last_sync) : '<span class="text-gray-400">未同期</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(device.registered_at)}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button onclick="viewDeviceDetails('${device.device_id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="詳細表示">👁️</button>
+                <button onclick="generateDeviceQR('${device.device_id}')" class="text-purple-600 hover:text-purple-900 mr-2" title="QR生成">📱</button>
+                <button onclick="syncDevice('${device.device_id}')" class="text-green-600 hover:text-green-900 mr-2" title="同期">🔄</button>
+                <button onclick="deleteDevice('${device.device_id}')" class="text-red-600 hover:text-red-900" title="削除">🗑️</button>
             </td>
         `;
         tbody.appendChild(row);
@@ -256,7 +260,7 @@ function renderViewerLinksTable() {
     tbody.innerHTML = '';
     
     if (currentViewerLinks.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">ViewerLinkがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-4 text-center text-gray-500">ViewerLinkがありません</td></tr>';
         return;
     }
     
@@ -269,17 +273,19 @@ function renderViewerLinksTable() {
         
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${link.viewer_link_id.substring(0, 8)}...</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${link.user_name}<br><small class="text-gray-400">${link.user_email}</small></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${link.device_type}<br><small class="text-gray-400">${link.device_id.substring(0, 8)}...</small></td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 ${!link.start_time ? 'text-red-500 font-medium' : ''}">${link.start_time ? formatDate(link.start_time) : '⚠️ 未設定'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 ${!link.end_time ? 'text-red-500 font-medium' : ''}">${link.end_time ? formatDate(link.end_time) : '⚠️ 未設定'}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                <span class="px-2 py-1 text-xs rounded-full ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">${isActive ? '🟢 アクティブ' : '⚪ 非アクティブ'}</span>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title="${link.viewer_link_id}">${link.viewer_link_id.substring(0, 8)}...</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500" title="${link.user_id || ''}">${link.user_id ? link.user_id.substring(0, 8) + '...' : '<span class="text-gray-400">未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500" title="${link.device_id || ''}">${link.device_id ? link.device_id.substring(0, 8) + '...' : '<span class="text-gray-400">未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500" title="${link.owner_user_id || ''}">${link.owner_user_id ? link.owner_user_id.substring(0, 8) + '...' : '<span class="text-gray-400">未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 ${!link.start_time ? 'text-red-500 font-medium' : ''}">${link.start_time ? formatDate(link.start_time) : '<span class="text-red-500">⚠️ 未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 ${!link.end_time ? 'text-red-500 font-medium' : ''}">${link.end_time ? formatDate(link.end_time) : '<span class="text-red-500">⚠️ 未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">
+                <span class="px-2 py-1 text-xs rounded-full ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">${isActive ? '🟢 true' : '⚪ false'}</span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onclick="generateLinkQR('${link.device_id}')" class="text-blue-600 hover:text-blue-900 mr-2">QR生成</button>
-                <button onclick="deleteViewerLink('${link.viewer_link_id}')" class="text-red-600 hover:text-red-900">削除</button>
+            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button onclick="viewViewerLinkDetails('${link.viewer_link_id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="詳細表示">👁️</button>
+                <button onclick="generateLinkQR('${link.device_id}')" class="text-purple-600 hover:text-purple-900 mr-2" title="QR生成">📱</button>
+                <button onclick="deleteViewerLink('${link.viewer_link_id}')" class="text-red-600 hover:text-red-900" title="削除">🗑️</button>
             </td>
         `;
         tbody.appendChild(row);
