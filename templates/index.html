@@ -39,17 +39,17 @@
             <!-- タブナビゲーション -->
             <div class="mb-8">
                 <nav class="flex space-x-8" aria-label="Tabs">
-                    <button id="my-devices-tab" class="tab-button active whitespace-nowrap py-2 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
-                        📱 自分のデバイス
-                    </button>
-                    <button id="graphs-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
-                        📊 グラフ表示
-                    </button>
-                    <button id="users-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                    <button id="users-tab" class="tab-button active whitespace-nowrap py-2 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
                         👥 ユーザー管理
                     </button>
                     <button id="devices-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                         🎤 デバイス管理
+                    </button>
+                    <button id="my-devices-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                        📱 自分のデバイス
+                    </button>
+                    <button id="graphs-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                        📊 グラフ表示
                     </button>
                     <button id="viewer-links-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                         🔗 ViewerLink管理
@@ -57,29 +57,43 @@
                 </nav>
             </div>
 
-            <!-- 自分のデバイス一覧タブ - WatchMe用メイン機能 -->
-            <div id="my-devices-content" class="tab-content">
+            <!-- ユーザー管理タブ -->
+            <div id="users-content" class="tab-content">
                 <div class="bg-white shadow rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <div class="sm:flex sm:items-center">
                             <div class="sm:flex-auto">
-                                <h2 class="text-lg font-medium text-gray-900">📱 自分のデバイス一覧</h2>
-                                <p class="mt-2 text-sm text-gray-700">音声データを取得している自分のデバイス状況</p>
+                                <h2 class="text-lg font-medium text-gray-900">👥 ユーザー管理</h2>
+                                <p class="mt-2 text-sm text-gray-700">システムユーザー（ゲスト・会員・サブスクライバー）の管理</p>
                             </div>
                             <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-                                <div class="flex space-x-2">
-                                    <input type="text" id="user-id-input" placeholder="ユーザーID入力" 
-                                           class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                    <button id="refresh-my-devices-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
-                                        🔄 更新
-                                    </button>
-                                </div>
+                                <button id="add-user-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
+                                    ➕ ユーザー追加
+                                </button>
                             </div>
                         </div>
                         
-                        <!-- デバイス状況カード表示 -->
-                        <div id="my-devices-grid" class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            <!-- デバイスカードがここに動的に挿入されます -->
+                        <div class="mt-8 flow-root">
+                            <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                                <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                                        <table id="users-table" class="min-w-full divide-y divide-gray-300">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名前</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">メール</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ステータス</th>
+                                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">登録日</th>
+                                                    <th class="relative px-6 py-3"><span class="sr-only">操作</span></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="users-table-body" class="bg-white divide-y divide-gray-200">
+                                                <!-- ユーザーデータがここに動的に挿入されます -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -135,55 +149,18 @@
                 </div>
             </div>
 
-            <!-- ユーザー管理タブ -->
-            <div id="users-content" class="tab-content hidden">
-                <div class="bg-white shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <div class="sm:flex sm:items-center">
-                            <div class="sm:flex-auto">
-                                <h2 class="text-lg font-medium text-gray-900">ユーザー一覧</h2>
-                                <p class="mt-2 text-sm text-gray-700">システムに登録されているユーザーの管理</p>
-                            </div>
-                            <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-                                <button id="add-user-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
-                                    ユーザー追加
-                                </button>
-                            </div>
-                        </div>
-                        <div class="mt-8 flow-root">
-                            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                                <table class="min-w-full divide-y divide-gray-300">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ユーザーID</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名前</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">メールアドレス</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">作成日</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="users-table-body" class="bg-white divide-y divide-gray-200">
-                                        <!-- ユーザーデータがここに挿入されます -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- デバイス管理タブ -->
             <div id="devices-content" class="tab-content hidden">
                 <div class="bg-white shadow rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <div class="sm:flex sm:items-center">
                             <div class="sm:flex-auto">
-                                <h2 class="text-lg font-medium text-gray-900">デバイス一覧</h2>
-                                <p class="mt-2 text-sm text-gray-700">登録されているデバイスの管理</p>
+                                <h2 class="text-lg font-medium text-gray-900">🎤 デバイス管理</h2>
+                                <p class="mt-2 text-sm text-gray-700">音声取得デバイスの登録・状態管理</p>
                             </div>
                             <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
                                 <button id="add-device-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
-                                    デバイス追加
+                                    ➕ デバイス追加
                                 </button>
                             </div>
                         </div>
@@ -193,11 +170,11 @@
                                     <thead class="bg-gray-50">
                                         <tr>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">デバイスID</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">デバイスタイプ</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">デバイス種別</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">オーナー</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状態</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">音声データ数</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">音声数</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最終同期</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">登録日</th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                                         </tr>
                                     </thead>
@@ -206,6 +183,34 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 自分のデバイス一覧タブ - WatchMe用メイン機能 -->
+            <div id="my-devices-content" class="tab-content hidden">
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <div class="sm:flex sm:items-center">
+                            <div class="sm:flex-auto">
+                                <h2 class="text-lg font-medium text-gray-900">📱 自分のデバイス一覧</h2>
+                                <p class="mt-2 text-sm text-gray-700">音声データを取得している自分のデバイス状況</p>
+                            </div>
+                            <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+                                <div class="flex space-x-2">
+                                    <input type="text" id="user-id-input" placeholder="ユーザーID入力" 
+                                           class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    <button id="refresh-my-devices-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
+                                        🔄 更新
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- デバイス状況カード表示 -->
+                        <div id="my-devices-grid" class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            <!-- デバイスカードがここに動的に挿入されます -->
                         </div>
                     </div>
                 </div>
