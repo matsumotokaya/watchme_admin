@@ -51,6 +51,20 @@ async def read_root(request: Request):
 
 
 # =============================================================================
+# Auth Users API - auth.usersテーブル（認証ユーザー管理）
+# =============================================================================
+
+@app.get("/api/auth-users")
+async def get_auth_users():
+    """auth.usersテーブルから認証ユーザーを取得"""
+    try:
+        # Supabaseのauth.usersテーブルから直接データを取得
+        result = supabase_client.client.postgrest.from_("auth.users").select("id, email, raw_user_meta_data, created_at, updated_at, last_sign_in_at, email_confirmed_at").execute()
+        return {"auth_users": result.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"認証ユーザーの取得に失敗しました: {str(e)}")
+
+# =============================================================================
 # Users API - 実際のフィールド構造に基づく
 # =============================================================================
 

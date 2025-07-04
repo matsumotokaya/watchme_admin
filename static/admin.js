@@ -4,6 +4,7 @@
  */
 
 // グローバル変数
+let currentAuthUsers = [];
 let currentUsers = [];
 let currentDevices = [];
 let currentViewerLinks = [];
@@ -92,6 +93,7 @@ async function loadAllData() {
     console.log('全データ読み込み開始');
     try {
         await Promise.all([
+            loadAuthUsers(),
             loadUsers(),
             loadDevices(),
             loadViewerLinks()
@@ -100,6 +102,18 @@ async function loadAllData() {
     } catch (error) {
         console.error('データ読み込みエラー:', error);
         showNotification('データの読み込みに失敗しました', 'error');
+    }
+}
+
+async function loadAuthUsers() {
+    try {
+        const response = await axios.get('/api/auth-users');
+        currentAuthUsers = response.data.auth_users;
+        renderAuthUsersTable();
+        console.log(`認証ユーザー ${currentAuthUsers.length} 件読み込み完了`);
+    } catch (error) {
+        console.error('認証ユーザー読み込みエラー:', error);
+        showNotification('認証ユーザーの読み込みに失敗しました', 'error');
     }
 }
 
@@ -158,6 +172,40 @@ async function loadStats() {
 // =============================================================================
 // テーブル描画関数群
 // =============================================================================
+
+function renderAuthUsersTable() {
+    const tbody = document.getElementById('auth-users-table-body');
+    tbody.innerHTML = '';
+    
+    if (currentAuthUsers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-4 text-center text-gray-500">認証ユーザーがありません</td></tr>';
+        return;
+    }
+    
+    currentAuthUsers.forEach(authUser => {
+        const row = document.createElement('tr');
+        
+        // メタデータの表示処理
+        const metadata = authUser.raw_user_meta_data;
+        const metadataDisplay = metadata ? 
+            Object.keys(metadata).map(key => `${key}: ${metadata[key]}`).join(', ') : 
+            '<span class="text-gray-400">-</span>';
+        
+        row.innerHTML = `
+            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title="${authUser.id}">${authUser.id.substring(0, 8)}...</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">${authUser.email || '<span class="text-gray-400">未設定</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500" title="${JSON.stringify(metadata)}">${metadataDisplay}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(authUser.created_at)}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${authUser.updated_at ? formatDate(authUser.updated_at) : '<span class="text-gray-400">-</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${authUser.last_sign_in_at ? formatDate(authUser.last_sign_in_at) : '<span class="text-gray-400">-</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${authUser.email_confirmed_at ? formatDate(authUser.email_confirmed_at) : '<span class="text-gray-400">未確認</span>'}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button onclick="viewAuthUserDetails('${authUser.id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="詳細表示">👁️</button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
 
 function renderUsersTable() {
     const tbody = document.getElementById('users-table-body');
@@ -1053,6 +1101,64 @@ function viewUserDetails(userId) {
             <button onclick="editUser('${user.user_id}')" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
                 編集
             </button>
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                閉じる
+            </button>
+        </div>
+    `;
+    
+    modalOverlay.classList.remove('hidden');
+}
+
+// 認証ユーザー詳細表示
+function viewAuthUserDetails(authUserId) {
+    const authUser = currentAuthUsers.find(u => u.id === authUserId);
+    if (!authUser) {
+        showNotification('認証ユーザーが見つかりません', 'error');
+        return;
+    }
+    
+    const metadata = authUser.raw_user_meta_data || {};
+    
+    modalContent.innerHTML = `
+        <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900">🔐 認証ユーザー詳細</h3>
+        </div>
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">認証ID</label>
+                    <div class="mt-1 text-sm text-gray-900 font-mono bg-gray-50 p-2 rounded">${authUser.id}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">メールアドレス</label>
+                    <div class="mt-1 text-sm text-gray-900">${authUser.email || '未設定'}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">作成日時</label>
+                    <div class="mt-1 text-sm text-gray-900">${formatDate(authUser.created_at)}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">更新日時</label>
+                    <div class="mt-1 text-sm text-gray-900">${authUser.updated_at ? formatDate(authUser.updated_at) : '未更新'}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">最終ログイン</label>
+                    <div class="mt-1 text-sm text-gray-900">${authUser.last_sign_in_at ? formatDate(authUser.last_sign_in_at) : 'ログイン履歴なし'}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">メール確認</label>
+                    <div class="mt-1 text-sm text-gray-900">${authUser.email_confirmed_at ? formatDate(authUser.email_confirmed_at) : '未確認'}</div>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">メタデータ</label>
+                <div class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                    <pre class="whitespace-pre-wrap">${JSON.stringify(metadata, null, 2)}</pre>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end mt-6 space-x-3">
             <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                 閉じる
             </button>
