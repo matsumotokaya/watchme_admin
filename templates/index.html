@@ -113,6 +113,42 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Whisperプロンプト生成コンポーネント -->
+                        <div class="mt-8">
+                            <div class="bg-purple-50 border border-purple-200 rounded-lg p-6">
+                                <h3 class="text-lg font-medium text-purple-900 mb-4">📝 Whisperプロンプト生成</h3>
+                                <p class="text-sm text-purple-700 mb-4">Whisperで文字起こししたデータを統合して、ChatGPT分析用のプロンプトを生成します。</p>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">デバイスID</label>
+                                        <input type="text" id="prompt-device-id" placeholder="d067d407-cf73-4174-a9c1-d91fb60d64d0" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">日付</label>
+                                        <input type="date" id="prompt-date" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm">
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 flex justify-between items-center">
+                                    <button id="generate-prompt-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        📝 プロンプト生成開始
+                                    </button>
+                                    <div id="prompt-status" class="text-sm text-gray-500"></div>
+                                </div>
+                                
+                                <!-- 処理結果表示エリア -->
+                                <div id="prompt-results" class="mt-6 hidden">
+                                    <h4 class="text-sm font-medium text-gray-700 mb-2">処理結果</h4>
+                                    <div class="bg-gray-50 rounded-md p-4 text-sm">
+                                        <pre id="prompt-results-content" class="whitespace-pre-wrap text-gray-600"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

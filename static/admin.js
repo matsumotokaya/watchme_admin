@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadStats();
     initializeDefaultUserSession();
     initializeWhisperDate();
+    initializePromptDate();
 });
 
 // =============================================================================
@@ -72,6 +73,9 @@ function setupEventListeners() {
     
     // Whisper機能のイベントリスナー
     document.getElementById('start-whisper-btn').addEventListener('click', startWhisperProcessing);
+    
+    // Whisperプロンプト生成機能のイベントリスナー
+    document.getElementById('generate-prompt-btn').addEventListener('click', generateWhisperPrompt);
     
     // モーダルを閉じる
     modalOverlay.addEventListener('click', function(e) {
@@ -1167,6 +1171,88 @@ function copyToClipboard(text) {
         console.error('コピーに失敗しました:', err);
         showNotification('コピーに失敗しました', 'error');
     });
+}
+
+// =============================================================================
+// Whisperプロンプト生成機能
+// =============================================================================
+
+async function generateWhisperPrompt() {
+    const deviceId = document.getElementById('prompt-device-id').value;
+    const date = document.getElementById('prompt-date').value;
+    const button = document.getElementById('generate-prompt-btn');
+    const statusDiv = document.getElementById('prompt-status');
+    const resultsDiv = document.getElementById('prompt-results');
+    const resultsContent = document.getElementById('prompt-results-content');
+    
+    // バリデーション
+    if (!deviceId) {
+        showNotification('デバイスIDを入力してください', 'error');
+        return;
+    }
+    
+    if (!date) {
+        showNotification('日付を選択してください', 'error');
+        return;
+    }
+    
+    // UI状態更新
+    button.disabled = true;
+    button.textContent = '⏳ 処理中...';
+    statusDiv.textContent = 'プロンプト生成APIを呼び出しています...';
+    resultsDiv.classList.add('hidden');
+    resultsContent.textContent = '';
+    
+    try {
+        // プロンプト生成API呼び出し
+        const response = await axios.get('http://localhost:8009/generate-mood-prompt-supabase', {
+            params: {
+                device_id: deviceId,
+                date: date
+            },
+            timeout: 30000 // 30秒タイムアウト
+        });
+        
+        const result = response.data;
+        
+        // 結果表示
+        statusDiv.textContent = '✅ プロンプト生成完了';
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = JSON.stringify(result, null, 2);
+        
+        // 成功通知
+        showNotification(`プロンプト生成完了: ${result.output_path}`, 'success');
+        
+    } catch (error) {
+        console.error('プロンプト生成エラー:', error);
+        
+        let errorMessage = 'プロンプト生成でエラーが発生しました';
+        if (error.response?.data?.detail) {
+            errorMessage += ': ' + error.response.data.detail;
+        } else if (error.message) {
+            errorMessage += ': ' + error.message;
+        }
+        
+        statusDiv.textContent = 'エラーが発生しました';
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = errorMessage;
+        
+        showNotification(errorMessage, 'error');
+    } finally {
+        // UI状態復元
+        button.disabled = false;
+        button.textContent = '📝 プロンプト生成開始';
+    }
+}
+
+// 日付を今日に設定する初期化関数（プロンプト生成用）
+function initializePromptDate() {
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    const promptDateElement = document.getElementById('prompt-date');
+    if (promptDateElement) {
+        promptDateElement.value = formattedDate;
+    }
 }
 
 // デバッグ用
