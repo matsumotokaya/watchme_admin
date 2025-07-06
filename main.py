@@ -35,14 +35,26 @@ app = FastAPI(title="WatchMe Admin (Fixed)", description="修正済みWatchMe管
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Supabaseクライアントの初期化
-try:
-    supabase_client = SupabaseClient()
-    print("Supabase client initialized successfully")
-except Exception as e:
-    print(f"Failed to initialize Supabase client: {e}")
-    supabase_client = None
+# Supabaseクライアントの遅延初期化
+supabase_client = None
 
+def get_supabase_client():
+    """Supabaseクライアントを遅延初期化して取得"""
+    global supabase_client
+    if supabase_client is None:
+        try:
+            supabase_client = SupabaseClient()
+            print("Supabase client initialized successfully")
+        except Exception as e:
+            print(f"Failed to initialize Supabase client: {e}")
+            raise e
+    return supabase_client
+
+
+@app.get("/health")
+async def health_check():
+    """ヘルスチェック - 高速レスポンス"""
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -59,7 +71,8 @@ async def get_auth_users():
     """auth.usersテーブルから認証ユーザーを取得"""
     try:
         # SQL関数を使用してauth.usersテーブルにアクセス
-        result = supabase_client.client.rpc('get_auth_users').execute()
+        client = get_supabase_client()
+        result = client.client.rpc('get_auth_users').execute()
         
         if result.data:
             return {"auth_users": result.data}
@@ -102,7 +115,8 @@ async def get_auth_users():
 async def get_users():
     """全ユーザーを取得"""
     try:
-        users_data = await supabase_client.select("users")
+        client = get_supabase_client()
+        users_data = await client.select("users")
         return users_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ユーザーの取得に失敗しました: {str(e)}")
@@ -118,7 +132,7 @@ async def create_user(user: UserCreate):
             "email": user.email,
             "created_at": datetime.now().isoformat()
         }
-        created_user = await supabase_client.insert("users", user_data)
+        created_user = await client.insert("users", user_data)
         return created_user
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ユーザーの作成に失敗しました: {str(e)}")
@@ -132,7 +146,8 @@ async def create_user(user: UserCreate):
 async def get_devices():
     """全デバイスを取得"""
     try:
-        devices_data = await supabase_client.select("devices")
+        client = get_supabase_client()
+        devices_data = await client.select("devices")
         return devices_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"デバイスの取得に失敗しました: {str(e)}")
@@ -879,4 +894,6 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=True)
+    print("🚀 WatchMe Admin Server starting...")
+    print("✅ Supabase client will be initialized on first API call")
+    uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=False, log_level="warning")

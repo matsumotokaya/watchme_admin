@@ -7,10 +7,6 @@
 let currentAuthUsers = [];
 let currentUsers = [];
 let currentDevices = [];
-let currentViewerLinks = [];
-let currentMyDevices = [];
-let currentUserId = null;
-let mainChart = null; // Chart.jsインスタンス
 
 // DOM要素の取得
 const tabButtons = document.querySelectorAll('.tab-button');
@@ -27,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAllData();
     loadStats();
     initializeDefaultUserSession();
+    initializeWhisperDate();
 });
 
 // =============================================================================
@@ -71,11 +68,10 @@ function switchTab(tabId) {
 function setupEventListeners() {
     document.getElementById('add-user-btn').addEventListener('click', showAddUserModal);
     document.getElementById('add-device-btn').addEventListener('click', showAddDeviceModal);
-    document.getElementById('add-viewer-link-btn').addEventListener('click', showAddViewerLinkModal);
     
-    // 新しいWatchMe機能のイベントリスナー
-    document.getElementById('refresh-my-devices-btn').addEventListener('click', refreshMyDevices);
-    document.getElementById('load-graph-btn').addEventListener('click', loadGraphData);
+    
+    // Whisper機能のイベントリスナー
+    document.getElementById('start-whisper-btn').addEventListener('click', startWhisperProcessing);
     
     // モーダルを閉じる
     modalOverlay.addEventListener('click', function(e) {
@@ -95,8 +91,7 @@ async function loadAllData() {
         await Promise.all([
             loadAuthUsers(),
             loadUsers(),
-            loadDevices(),
-            loadViewerLinks()
+            loadDevices()
         ]);
         console.log('全データ読み込み完了');
     } catch (error) {
@@ -145,24 +140,13 @@ async function loadDevices() {
     }
 }
 
-async function loadViewerLinks() {
-    try {
-        const response = await axios.get('/api/viewer-links/details');
-        currentViewerLinks = response.data;
-        renderViewerLinksTable();
-        console.log(`ViewerLink ${currentViewerLinks.length} 件読み込み完了`);
-    } catch (error) {
-        console.error('ViewerLink読み込みエラー:', error);
-        showNotification('ViewerLinkの読み込みに失敗しました', 'error');
-    }
-}
 
 async function loadStats() {
     try {
         const response = await axios.get('/api/stats');
         const stats = response.data;
         document.getElementById('stats-display').textContent = 
-            `ユーザー: ${stats.users_count} | デバイス: ${stats.devices_count} | リンク: ${stats.viewer_links_count}`;
+            `ユーザー: ${stats.users_count} | デバイス: ${stats.devices_count}`;
     } catch (error) {
         console.error('統計読み込みエラー:', error);
         document.getElementById('stats-display').textContent = '統計情報取得失敗';
@@ -234,7 +218,7 @@ function renderUsersTable() {
             '<span class="text-gray-400">-</span>';
         
         row.innerHTML = `
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title="${user.user_id}">${user.user_id.substring(0, 8)}...</td>
+            <td class="px-4 py-4 text-sm font-mono text-gray-900 break-all select-all cursor-pointer" title="クリックでコピー" onclick="copyToClipboard('${user.user_id}')">${user.user_id}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${user.name || '<span class="text-gray-400">未設定</span>'}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${user.email || '<span class="text-gray-400">未設定</span>'}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">${statusBadge}</td>
@@ -279,9 +263,9 @@ function renderDevicesTable() {
         
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title="${device.device_id}">${device.device_id.substring(0, 8)}...</td>
+            <td class="px-4 py-4 text-sm font-mono text-gray-900 break-all select-all cursor-pointer" title="クリックでコピー" onclick="copyToClipboard('${device.device_id}')">${device.device_id}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${device.device_type || '-'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500" title="${device.owner_user_id || ''}">${device.owner_user_id ? device.owner_user_id.substring(0, 8) + '...' : '<span class="text-gray-400">未設定</span>'}</td>
+            <td class="px-4 py-4 text-sm font-mono text-gray-500 break-all select-all cursor-pointer" title="${device.owner_user_id ? 'クリックでコピー' : ''}" ${device.owner_user_id ? `onclick="copyToClipboard('${device.owner_user_id}')"` : ''}>${device.owner_user_id || '<span class="text-gray-400">未設定</span>'}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${device.platform_type || '<span class="text-gray-400">-</span>'}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${device.platform_identifier || '<span class="text-gray-400">-</span>'}</td>
             <td class="px-4 py-4 whitespace-nowrap text-sm">
@@ -303,42 +287,6 @@ function renderDevicesTable() {
     });
 }
 
-function renderViewerLinksTable() {
-    const tbody = document.getElementById('viewer-links-table-body');
-    tbody.innerHTML = '';
-    
-    if (currentViewerLinks.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-4 text-center text-gray-500">ViewerLinkがありません</td></tr>';
-        return;
-    }
-    
-    currentViewerLinks.forEach(link => {
-        // アクティブ状態の計算
-        const now = new Date();
-        const startTime = link.start_time ? new Date(link.start_time) : null;
-        const endTime = link.end_time ? new Date(link.end_time) : null;
-        const isActive = startTime && endTime && startTime <= now && now <= endTime;
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title="${link.viewer_link_id}">${link.viewer_link_id.substring(0, 8)}...</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500" title="${link.user_id || ''}">${link.user_id ? link.user_id.substring(0, 8) + '...' : '<span class="text-gray-400">未設定</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500" title="${link.device_id || ''}">${link.device_id ? link.device_id.substring(0, 8) + '...' : '<span class="text-gray-400">未設定</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500" title="${link.owner_user_id || ''}">${link.owner_user_id ? link.owner_user_id.substring(0, 8) + '...' : '<span class="text-gray-400">未設定</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 ${!link.start_time ? 'text-red-500 font-medium' : ''}">${link.start_time ? formatDate(link.start_time) : '<span class="text-red-500">⚠️ 未設定</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 ${!link.end_time ? 'text-red-500 font-medium' : ''}">${link.end_time ? formatDate(link.end_time) : '<span class="text-red-500">⚠️ 未設定</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm">
-                <span class="px-2 py-1 text-xs rounded-full ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">${isActive ? '🟢 true' : '⚪ false'}</span>
-            </td>
-            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onclick="viewViewerLinkDetails('${link.viewer_link_id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="詳細表示">👁️</button>
-                <button onclick="generateLinkQR('${link.device_id}')" class="text-purple-600 hover:text-purple-900 mr-2" title="QR生成">📱</button>
-                <button onclick="deleteViewerLink('${link.viewer_link_id}')" class="text-red-600 hover:text-red-900" title="削除">🗑️</button>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
 
 // =============================================================================
 // モーダル表示関数群
@@ -405,51 +353,6 @@ function showAddDeviceModal() {
     modalOverlay.classList.remove('hidden');
 }
 
-function showAddViewerLinkModal() {
-    modalContent.innerHTML = `
-        <div class="mb-4">
-            <h3 class="text-lg font-medium text-gray-900">ViewerLink追加</h3>
-            <p class="text-sm text-gray-500 mt-1">ユーザーとデバイスを関連付けます</p>
-        </div>
-        <form id="add-viewer-link-form">
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">ユーザー</label>
-                <select id="viewer-link-user-id" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    <option value="">ユーザーを選択</option>
-                    ${currentUsers.map(user => `<option value="${user.user_id}">${user.name} (${user.email})</option>`).join('')}
-                </select>
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">デバイス</label>
-                <select id="viewer-link-device-id" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    <option value="">デバイスを選択</option>
-                    ${currentDevices.map(device => `<option value="${device.device_id}">${device.device_type} (${device.device_id.substring(0, 8)}...)</option>`).join('')}
-                </select>
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">開始時間 <span class="text-red-500">*</span></label>
-                <input type="datetime-local" id="viewer-link-start-time" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <p class="text-xs text-amber-600 mt-1">⚠️ WatchMe要件: 開始時間は必須です</p>
-            </div>
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">終了時間 <span class="text-red-500">*</span></label>
-                <input type="datetime-local" id="viewer-link-end-time" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                <p class="text-xs text-amber-600 mt-1">⚠️ WatchMe要件: 終了時間は必須です</p>
-            </div>
-            <div class="flex justify-end space-x-3">
-                <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                    キャンセル
-                </button>
-                <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
-                    追加
-                </button>
-            </div>
-        </form>
-    `;
-    
-    document.getElementById('add-viewer-link-form').addEventListener('submit', handleAddViewerLink);
-    modalOverlay.classList.remove('hidden');
-}
 
 // =============================================================================
 // フォーム処理関数群
@@ -1172,6 +1075,98 @@ function viewAuthUserDetails(authUserId) {
 function editUser(userId) {
     showNotification('ユーザー編集機能は今後実装予定です', 'info');
     closeModal();
+}
+
+// =============================================================================
+// Whisper音声文字起こし機能
+// =============================================================================
+
+async function startWhisperProcessing() {
+    const deviceId = document.getElementById('whisper-device-id').value.trim();
+    const date = document.getElementById('whisper-date').value;
+    const model = document.getElementById('whisper-model').value;
+    const button = document.getElementById('start-whisper-btn');
+    const statusDiv = document.getElementById('whisper-status');
+    const resultsDiv = document.getElementById('whisper-results');
+    const resultsContent = document.getElementById('whisper-results-content');
+    
+    // 入力チェック
+    if (!deviceId || !date) {
+        showNotification('デバイスIDと日付を入力してください', 'error');
+        return;
+    }
+    
+    // UUID形式の簡単チェック
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(deviceId)) {
+        showNotification('正しいデバイスIDのフォーマットを入力してください', 'error');
+        return;
+    }
+    
+    // UI状態更新
+    button.disabled = true;
+    button.textContent = '処理中...';
+    statusDiv.textContent = 'Whisper処理を開始しています...';
+    resultsDiv.classList.add('hidden');
+    resultsContent.textContent = '';
+    
+    try {
+        // Whisper APIに送信
+        const response = await axios.post('http://localhost:8001/fetch-and-transcribe', {
+            device_id: deviceId,
+            date: date,
+            model: model
+        });
+        
+        const result = response.data;
+        
+        // 結果表示
+        statusDiv.textContent = '処理が完了しました';
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = JSON.stringify(result, null, 2);
+        
+        // 成功通知
+        const processedCount = result.summary?.supabase_saved || 0;
+        const totalCount = result.summary?.total_time_blocks || 48;
+        showNotification(`Whisper処理完了: ${processedCount}/${totalCount} 件の音声データを処理しました`, 'success');
+        
+    } catch (error) {
+        console.error('Whisper処理エラー:', error);
+        
+        let errorMessage = 'Whisper処理でエラーが発生しました';
+        if (error.response?.data?.detail) {
+            errorMessage += ': ' + error.response.data.detail;
+        } else if (error.message) {
+            errorMessage += ': ' + error.message;
+        }
+        
+        statusDiv.textContent = 'エラーが発生しました';
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = errorMessage;
+        
+        showNotification(errorMessage, 'error');
+    } finally {
+        // UI状態復元
+        button.disabled = false;
+        button.textContent = '🎤 Whisper処理開始';
+    }
+}
+
+// 日付を今日に設定する初期化関数
+function initializeWhisperDate() {
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    document.getElementById('whisper-date').value = formattedDate;
+}
+
+// クリップボードにコピーする関数
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        showNotification(`コピーしました: ${text.substring(0, 16)}...`, 'success');
+    }).catch(function(err) {
+        console.error('コピーに失敗しました:', err);
+        showNotification('コピーに失敗しました', 'error');
+    });
 }
 
 // デバッグ用

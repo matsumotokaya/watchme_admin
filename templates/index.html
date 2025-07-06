@@ -39,7 +39,16 @@
             <!-- タブナビゲーション -->
             <div class="mb-8">
                 <nav class="flex space-x-8" aria-label="Tabs">
-                    <button id="auth-users-tab" class="tab-button active whitespace-nowrap py-2 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
+                    <button id="psychology-graph-tab" class="tab-button active whitespace-nowrap py-2 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
+                        🧠 心理グラフ
+                    </button>
+                    <button id="behavior-graph-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                        🚶 行動グラフ
+                    </button>
+                    <button id="emotion-graph-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                        😊 感情グラフ
+                    </button>
+                    <button id="auth-users-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                         🔐 ユーザー認証管理
                     </button>
                     <button id="users-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
@@ -48,20 +57,130 @@
                     <button id="devices-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                         🎤 デバイス管理
                     </button>
-                    <button id="my-devices-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
-                        📱 自分のデバイス
-                    </button>
-                    <button id="graphs-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
-                        📊 グラフ表示
-                    </button>
-                    <button id="viewer-links-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
-                        🔗 ViewerLink管理
-                    </button>
                 </nav>
             </div>
 
+            <!-- 心理グラフタブ -->
+            <div id="psychology-graph-content" class="tab-content">
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <div class="sm:flex sm:items-center">
+                            <div class="sm:flex-auto">
+                                <h2 class="text-lg font-medium text-gray-900">🧠 心理グラフ</h2>
+                                <p class="mt-2 text-sm text-gray-700">音声データから心理状態を分析・可視化</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Whisperコンポーネント -->
+                        <div class="mt-8">
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                                <h3 class="text-lg font-medium text-blue-900 mb-4">🎤 Whisper音声文字起こし</h3>
+                                <p class="text-sm text-blue-700 mb-4">指定したデバイスIDと日付の音声データを文字起こしして、データベースに保存します。</p>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">デバイスID</label>
+                                        <input type="text" id="whisper-device-id" placeholder="d067d407-cf73-4174-a9c1-d91fb60d64d0" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">日付</label>
+                                        <input type="date" id="whisper-date" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">モデル</label>
+                                        <select id="whisper-model" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                                            <option value="medium">Medium（標準）</option>
+                                            <option value="large">Large（高精度）</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 flex justify-between items-center">
+                                    <button id="start-whisper-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        🎤 Whisper処理開始
+                                    </button>
+                                    <div id="whisper-status" class="text-sm text-gray-500"></div>
+                                </div>
+                                
+                                <!-- 処理結果表示エリア -->
+                                <div id="whisper-results" class="mt-6 hidden">
+                                    <h4 class="text-sm font-medium text-gray-700 mb-2">処理結果</h4>
+                                    <div class="bg-gray-50 rounded-md p-4 text-sm">
+                                        <pre id="whisper-results-content" class="whitespace-pre-wrap text-gray-600"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 行動グラフタブ -->
+            <div id="behavior-graph-content" class="tab-content hidden">
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <div class="sm:flex sm:items-center">
+                            <div class="sm:flex-auto">
+                                <h2 class="text-lg font-medium text-gray-900">🚶 行動グラフ</h2>
+                                <p class="mt-2 text-sm text-gray-700">音声データから行動パターンを分析・可視化</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-8">
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-6">
+                                <div class="text-center py-12">
+                                    <div class="text-green-600 text-6xl mb-4">🚧</div>
+                                    <h3 class="text-xl font-medium text-green-900 mb-2">Coming Soon</h3>
+                                    <p class="text-green-700 mb-6">行動パターン分析機能を開発中です</p>
+                                    <div class="bg-green-100 rounded-md p-4 text-sm text-green-800 max-w-md mx-auto">
+                                        <strong>予定機能:</strong><br>
+                                        • 行動パターンの可視化<br>
+                                        • 時間別活動グラフ<br>
+                                        • 行動傾向の分析<br>
+                                        • 移動パターンの把握
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 感情グラフタブ -->
+            <div id="emotion-graph-content" class="tab-content hidden">
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <div class="sm:flex sm:items-center">
+                            <div class="sm:flex-auto">
+                                <h2 class="text-lg font-medium text-gray-900">😊 感情グラフ</h2>
+                                <p class="mt-2 text-sm text-gray-700">音声データから感情状態を分析・可視化</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-8">
+                            <div class="bg-pink-50 border border-pink-200 rounded-lg p-6">
+                                <div class="text-center py-12">
+                                    <div class="text-pink-600 text-6xl mb-4">🚧</div>
+                                    <h3 class="text-xl font-medium text-pink-900 mb-2">Coming Soon</h3>
+                                    <p class="text-pink-700 mb-6">感情分析機能を開発中です</p>
+                                    <div class="bg-pink-100 rounded-md p-4 text-sm text-pink-800 max-w-md mx-auto">
+                                        <strong>予定機能:</strong><br>
+                                        • 感情スコアの可視化<br>
+                                        • 喜怒哀楽の分析<br>
+                                        • 感情変化のトラッキング<br>
+                                        • ストレスレベルの測定
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ユーザー認証管理タブ -->
-            <div id="auth-users-content" class="tab-content">
+            <div id="auth-users-content" class="tab-content hidden">
                 <div class="bg-white shadow rounded-lg">
                     <div class="px-4 py-5 sm:p-6">
                         <div class="sm:flex sm:items-center">
@@ -123,7 +242,7 @@
                                         <table id="users-table" class="min-w-full divide-y divide-gray-300">
                                             <thead class="bg-gray-50">
                                                 <tr>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">user_id</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-80">user_id</th>
                                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">name</th>
                                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">email</th>
                                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">status</th>
@@ -146,55 +265,6 @@
                 </div>
             </div>
 
-            <!-- グラフ表示タブ - WatchMe用心理・行動・感情分析 -->
-            <div id="graphs-content" class="tab-content hidden">
-                <div class="bg-white shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <div class="sm:flex sm:items-center">
-                            <div class="sm:flex-auto">
-                                <h2 class="text-lg font-medium text-gray-900">📊 心理・行動・感情グラフ</h2>
-                                <p class="mt-2 text-sm text-gray-700">音声データに基づく心理・行動・感情の可視化</p>
-                            </div>
-                            <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-                                <div class="flex space-x-2">
-                                    <select id="graph-device-select" class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                        <option value="">デバイス選択</option>
-                                    </select>
-                                    <select id="graph-type-select" class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                        <option value="emotion">😊 感情分析</option>
-                                        <option value="behavior">🚶 行動分析</option>
-                                        <option value="psychology">🧠 心理分析</option>
-                                    </select>
-                                    <input type="datetime-local" id="graph-start-time" class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                    <input type="datetime-local" id="graph-end-time" class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                    <button id="load-graph-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700">
-                                        📈 グラフ表示
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- グラフ表示エリア -->
-                        <div class="mt-8">
-                            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                                <!-- メイングラフ -->
-                                <div class="bg-gray-50 rounded-lg p-4">
-                                    <h3 class="text-sm font-medium text-gray-700 mb-4">メイングラフ</h3>
-                                    <canvas id="main-graph-canvas" width="400" height="200"></canvas>
-                                </div>
-                                
-                                <!-- サマリー情報 -->
-                                <div class="bg-gray-50 rounded-lg p-4">
-                                    <h3 class="text-sm font-medium text-gray-700 mb-4">分析サマリー</h3>
-                                    <div id="graph-summary" class="text-sm text-gray-600">
-                                        デバイスと時間範囲を選択してグラフを表示してください
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- デバイス管理タブ -->
             <div id="devices-content" class="tab-content hidden">
@@ -216,9 +286,9 @@
                                 <table class="min-w-full divide-y divide-gray-300">
                                     <thead class="bg-gray-50">
                                         <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">device_id</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-80">device_id</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">device_type</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">owner_user_id</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-80">owner_user_id</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">platform_type</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">platform_identifier</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">status</th>
@@ -238,76 +308,6 @@
                 </div>
             </div>
 
-            <!-- 自分のデバイス一覧タブ - WatchMe用メイン機能 -->
-            <div id="my-devices-content" class="tab-content hidden">
-                <div class="bg-white shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <div class="sm:flex sm:items-center">
-                            <div class="sm:flex-auto">
-                                <h2 class="text-lg font-medium text-gray-900">📱 自分のデバイス一覧</h2>
-                                <p class="mt-2 text-sm text-gray-700">音声データを取得している自分のデバイス状況</p>
-                            </div>
-                            <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-                                <div class="flex space-x-2">
-                                    <input type="text" id="user-id-input" placeholder="ユーザーID入力" 
-                                           class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                                    <button id="refresh-my-devices-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
-                                        🔄 更新
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- デバイス状況カード表示 -->
-                        <div id="my-devices-grid" class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            <!-- デバイスカードがここに動的に挿入されます -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ViewerLink管理タブ -->
-            <div id="viewer-links-content" class="tab-content hidden">
-                <div class="bg-white shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <div class="sm:flex sm:items-center">
-                            <div class="sm:flex-auto">
-                                <h2 class="text-lg font-medium text-gray-900">🔗 ViewerLink一覧</h2>
-                                <p class="mt-2 text-sm text-gray-700">ユーザーとデバイスの時間範囲制限付き関連付け管理</p>
-                                <div class="mt-2 text-xs text-amber-600">
-                                    ⚠️ WatchMe要件: start_time と end_time は必須です
-                                </div>
-                            </div>
-                            <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-                                <button id="add-viewer-link-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
-                                    ViewerLink追加
-                                </button>
-                            </div>
-                        </div>
-                        <div class="mt-8 flow-root">
-                            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                                <table class="min-w-full divide-y divide-gray-300">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">viewer_link_id</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">user_id</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">device_id</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">owner_user_id</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">start_time</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">end_time</th>
-                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">is_active</th>
-                                            <th class="relative px-4 py-3"><span class="sr-only">操作</span></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="viewer-links-table-body" class="bg-white divide-y divide-gray-200">
-                                        <!-- ViewerLinkデータがここに挿入されます -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </main>
     </div>
 
