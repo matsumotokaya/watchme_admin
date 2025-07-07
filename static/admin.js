@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeDefaultUserSession();
     initializeWhisperDate();
     initializePromptDate();
+    initializeChatGPTDate();
 });
 
 // =============================================================================
@@ -76,6 +77,9 @@ function setupEventListeners() {
     
     // Whisperプロンプト生成機能のイベントリスナー
     document.getElementById('generate-prompt-btn').addEventListener('click', generateWhisperPrompt);
+    
+    // ChatGPTスコアリング機能のイベントリスナー
+    document.getElementById('start-chatgpt-btn').addEventListener('click', startChatGPTAnalysis);
     
     // モーダルを閉じる
     modalOverlay.addEventListener('click', function(e) {
@@ -1252,6 +1256,129 @@ function initializePromptDate() {
     const promptDateElement = document.getElementById('prompt-date');
     if (promptDateElement) {
         promptDateElement.value = formattedDate;
+    }
+}
+
+// =============================================================================
+// ChatGPTスコアリング機能
+// =============================================================================
+
+async function startChatGPTAnalysis() {
+    const deviceId = document.getElementById('chatgpt-device-id').value;
+    const date = document.getElementById('chatgpt-date').value;
+    const button = document.getElementById('start-chatgpt-btn');
+    const statusDiv = document.getElementById('chatgpt-status');
+    const resultsDiv = document.getElementById('chatgpt-results');
+    const summaryDiv = document.getElementById('chatgpt-summary');
+    const insightsDiv = document.getElementById('chatgpt-insights');
+    const resultsContent = document.getElementById('chatgpt-results-content');
+    
+    // バリデーション
+    if (!deviceId) {
+        showNotification('デバイスIDを入力してください', 'error');
+        return;
+    }
+    
+    if (!date) {
+        showNotification('日付を選択してください', 'error');
+        return;
+    }
+    
+    // UI状態更新
+    button.disabled = true;
+    button.textContent = '⏳ 処理中...';
+    statusDiv.textContent = 'ChatGPT APIを呼び出しています...';
+    resultsDiv.classList.add('hidden');
+    summaryDiv.innerHTML = '';
+    insightsDiv.innerHTML = '';
+    resultsContent.textContent = '';
+    
+    try {
+        // ChatGPT分析API呼び出し
+        const response = await axios.post('http://localhost:8002/analyze-vibegraph-supabase', {
+            device_id: deviceId,
+            date: date
+        }, {
+            timeout: 60000 // 60秒タイムアウト
+        });
+        
+        const result = response.data;
+        
+        // 結果表示
+        statusDiv.textContent = '✅ ChatGPT分析完了';
+        resultsDiv.classList.remove('hidden');
+        
+        // サマリー表示
+        if (result.summary) {
+            const summary = result.summary;
+            summaryDiv.innerHTML = `
+                <h5 class="font-medium text-gray-700 mb-2">📊 スコアサマリー</h5>
+                <ul class="list-disc list-inside space-y-1">
+                    <li>平均スコア: <span class="font-medium">${summary.average_score}</span></li>
+                    <li>ポジティブ時間: <span class="font-medium">${summary.positive_hours}時間</span></li>
+                    <li>ネガティブ時間: <span class="font-medium">${summary.negative_hours}時間</span></li>
+                    <li>ニュートラル時間: <span class="font-medium">${summary.neutral_hours}時間</span></li>
+                </ul>
+            `;
+            
+            // インサイト表示
+            if (summary.insights && summary.insights.length > 0) {
+                insightsDiv.innerHTML = `
+                    <h5 class="font-medium text-gray-700 mb-2">💡 インサイト</h5>
+                    <ul class="list-disc list-inside space-y-1">
+                        ${summary.insights.map(insight => `<li>${insight}</li>`).join('')}
+                    </ul>
+                `;
+            }
+            
+            // 感情変化ポイント表示
+            if (summary.vibe_changes && summary.vibe_changes.length > 0) {
+                insightsDiv.innerHTML += `
+                    <h5 class="font-medium text-gray-700 mb-2 mt-4">🔄 感情変化ポイント</h5>
+                    <ul class="list-disc list-inside space-y-1">
+                        ${summary.vibe_changes.map(change => 
+                            `<li>${change.time}: ${change.event} (スコア: ${change.score})</li>`
+                        ).join('')}
+                    </ul>
+                `;
+            }
+        }
+        
+        // 詳細データ表示
+        resultsContent.textContent = JSON.stringify(result, null, 2);
+        
+        // 成功通知
+        showNotification(`ChatGPT分析完了: vibe_whisper_summaryテーブルに保存されました`, 'success');
+        
+    } catch (error) {
+        console.error('ChatGPT分析エラー:', error);
+        
+        let errorMessage = 'ChatGPT分析でエラーが発生しました';
+        if (error.response?.data?.detail) {
+            errorMessage += ': ' + error.response.data.detail;
+        } else if (error.message) {
+            errorMessage += ': ' + error.message;
+        }
+        
+        statusDiv.textContent = 'エラーが発生しました';
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = errorMessage;
+        
+        showNotification(errorMessage, 'error');
+    } finally {
+        // UI状態復元
+        button.disabled = false;
+        button.textContent = '🤖 ChatGPT分析開始';
+    }
+}
+
+// 日付を今日に設定する初期化関数（ChatGPT用）
+function initializeChatGPTDate() {
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    const chatgptDateElement = document.getElementById('chatgpt-date');
+    if (chatgptDateElement) {
+        chatgptDateElement.value = formattedDate;
     }
 }
 

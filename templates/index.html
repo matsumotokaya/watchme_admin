@@ -149,6 +149,44 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- ChatGPTスコアリングコンポーネント -->
+                        <div class="mt-8">
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-6">
+                                <h3 class="text-lg font-medium text-green-900 mb-4">🤖 ChatGPTスコアリング</h3>
+                                <p class="text-sm text-green-700 mb-4">Whisperプロンプトを元にChatGPTで心理スコアを分析し、結果をデータベースに保存します。</p>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">デバイスID</label>
+                                        <input type="text" id="chatgpt-device-id" placeholder="d067d407-cf73-4174-a9c1-d91fb60d64d0" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">日付</label>
+                                        <input type="date" id="chatgpt-date" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 flex justify-between items-center">
+                                    <button id="start-chatgpt-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        🤖 ChatGPT分析開始
+                                    </button>
+                                    <div id="chatgpt-status" class="text-sm text-gray-500"></div>
+                                </div>
+                                
+                                <!-- 処理結果表示エリア -->
+                                <div id="chatgpt-results" class="mt-6 hidden">
+                                    <h4 class="text-sm font-medium text-gray-700 mb-2">処理結果</h4>
+                                    <div class="bg-gray-50 rounded-md p-4">
+                                        <div id="chatgpt-summary" class="text-sm text-gray-600 mb-4"></div>
+                                        <div id="chatgpt-insights" class="text-sm text-gray-600 mb-4"></div>
+                                        <pre id="chatgpt-results-content" class="whitespace-pre-wrap text-xs text-gray-500"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
