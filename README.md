@@ -579,8 +579,13 @@ NODE_ENV=development
 ## 🔧 最新のアップデート（2025-07-07）
 
 ### ✨ 新機能・改善点
-- **🆕 ChatGPTスコアリングUI追加**: ChatGPTで心理スコアを分析し、結果を表示・保存するUIコンポーネント
-- **🆕 プロンプト生成UI追加**: Whisperデータを統合してChatGPT分析用プロンプトを生成するUIコンポーネント
+- **🆕 Whisper API Supabase統合完了**: JSONファイル出力からSupabaseデータベース（vibe_whisperテーブル）への直接保存に移行
+- **🆕 プロンプト生成API Supabase統合**: vibe_whisperテーブルから読み込み、vibe_whisper_promptテーブルに保存
+- **🆕 ChatGPT処理API Supabase統合**: vibe_whisper_promptテーブルから読み込み、vibe_whisper_summaryテーブルに保存
+- **🆕 管理画面UI統合**: 心理グラフタブに3つの処理コンポーネントを追加
+  - Whisper音声文字起こし（青色）
+  - Whisperプロンプト生成（紫色）
+  - ChatGPTスコアリング（緑色）
 - **⚡ 起動時間の最適化**: 遅延初期化により3-5分の起動時間を数秒に短縮
 - **🗂️ 不要機能の削除**: 📱 自分のデバイス、📊 グラフ表示、🔗 ViewerLink管理機能を削除
 - **📋 UUIDの完全表示**: 省略表示を廃止し、全文表示でワンクリックコピー機能を実装
