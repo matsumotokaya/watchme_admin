@@ -1,62 +1,54 @@
 #!/bin/bash
 
-# WatchMe 管理システム起動スクリプト
-# 使用方法: ./start.sh
+# WatchMe Admin - 起動スクリプト
+# 最も確実に起動する方法
 
-echo "🎧 WatchMe 音声データ心理分析システム - 管理画面起動中..."
-echo ""
+echo "🚀 WatchMe Admin 起動中..."
 
-# プロジェクトディレクトリに移動
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+# スクリプトのディレクトリに移動
+cd "$(dirname "$0")"
 
-# 既存のプロセスをチェック・終了
-echo "📋 既存プロセスをチェック中..."
-EXISTING_PID=$(lsof -ti :9000)
-if [ ! -z "$EXISTING_PID" ]; then
-    echo "⚠️  ポート9000が使用中です (PID: $EXISTING_PID)"
-    echo "💀 既存プロセスを終了します..."
-    kill -9 $EXISTING_PID 2>/dev/null
+# ポート9000を確実に解放（複数の方法で確認）
+echo "🔧 ポート9000を解放中..."
+# 方法1: lsofで検索して強制終了
+lsof -ti :9000 | xargs kill -9 2>/dev/null || true
+# 方法2: uvicornプロセスを名前で検索して終了
+pkill -f "uvicorn.*9000" 2>/dev/null || true
+# 方法3: pythonプロセスでポート9000を使用しているものを終了
+pkill -f "python.*9000" 2>/dev/null || true
+sleep 2
+
+# ポートが解放されたか確認
+if lsof -i :9000 >/dev/null 2>&1; then
+    echo "⚠️  ポート9000がまだ使用中です。再度解放を試みます..."
+    lsof -ti :9000 | xargs kill -9 2>/dev/null || true
     sleep 2
-    echo "✅ プロセス終了完了"
 fi
 
-# 環境変数ファイルをチェック
+# 環境変数チェック
 if [ ! -f ".env" ]; then
-    echo "❌ .env ファイルが見つかりません"
-    echo "📝 .env.example から .env を作成してください"
-    echo ""
-    echo "cp .env.example .env"
-    echo "# その後、.env ファイルを編集してSupabaseの設定を入力"
+    echo "❌ .envファイルが見つかりません"
+    echo "📝 以下の内容で.envファイルを作成してください："
+    echo "SUPABASE_URL=https://your-project.supabase.co"
+    echo "SUPABASE_KEY=your-anon-key"
     exit 1
 fi
 
-# 仮想環境の確認・アクティベート
-if [ -d "venv" ]; then
-    echo "🐍 仮想環境をアクティベート中..."
-    source venv/bin/activate
-    echo "✅ 仮想環境アクティベート完了"
-else
-    echo "⚠️  仮想環境が見つかりません"
-    echo "💡 Python標準環境を使用します"
-fi
-
-# 依存関係のチェック
-echo "📦 依存関係をチェック中..."
-if ! python3 -c "import uvicorn, fastapi, supabase" 2>/dev/null; then
-    echo "❌ 必要なパッケージが不足しています"
-    echo "📥 依存関係をインストール中..."
-    pip install -r requirements.txt
+# 依存関係の確認（正しいパッケージをチェック）
+echo "📦 依存関係を確認中..."
+if ! python3 -c "import fastapi, uvicorn, httpx" 2>/dev/null; then
+    echo "⚠️  必要なパッケージが不足しています"
+    echo "📥 インストール中..."
+    pip3 install -r requirements.txt
 fi
 
 # サーバー起動
 echo ""
-echo "🚀 WatchMe管理システムを起動しています..."
-echo "📍 URL: http://localhost:9000"
-echo "🔄 自動リロード: 有効"
+echo "✅ 起動準備完了"
+echo "📍 アクセス先: http://localhost:9000"
+echo "⏹️  停止方法: Ctrl+C"
+echo "================================="
 echo ""
-echo "⏹️  停止するには Ctrl+C を押してください"
-echo "================================================"
 
-# uvicornでサーバー起動
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --reload
+# uvicornで起動（ログレベルは警告以上のみ表示）
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --log-level warning

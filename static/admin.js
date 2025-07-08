@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeWhisperDate();
     initializePromptDate();
     initializeChatGPTDate();
+    initializeSEDDate();
 });
 
 // =============================================================================
@@ -80,6 +81,9 @@ function setupEventListeners() {
     
     // ChatGPTスコアリング機能のイベントリスナー
     document.getElementById('start-chatgpt-btn').addEventListener('click', startChatGPTAnalysis);
+    
+    // SED音響イベント検出機能のイベントリスナー
+    document.getElementById('start-sed-btn').addEventListener('click', startSEDProcessing);
     
     // モーダルを閉じる
     modalOverlay.addEventListener('click', function(e) {
@@ -1379,6 +1383,103 @@ function initializeChatGPTDate() {
     const chatgptDateElement = document.getElementById('chatgpt-date');
     if (chatgptDateElement) {
         chatgptDateElement.value = formattedDate;
+    }
+}
+
+// =============================================================================
+// SED音響イベント検出機能
+// =============================================================================
+
+async function startSEDProcessing() {
+    const deviceId = document.getElementById('sed-device-id').value.trim();
+    const date = document.getElementById('sed-date').value;
+    const threshold = parseFloat(document.getElementById('sed-threshold').value);
+    const button = document.getElementById('start-sed-btn');
+    const statusDiv = document.getElementById('sed-status');
+    const resultsDiv = document.getElementById('sed-results');
+    const resultsContent = document.getElementById('sed-results-content');
+    
+    // 入力チェック
+    if (!deviceId || !date) {
+        showNotification('デバイスIDと日付を入力してください', 'error');
+        return;
+    }
+    
+    // UUID形式の簡単チェック
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(deviceId)) {
+        showNotification('正しいデバイスIDのフォーマットを入力してください', 'error');
+        return;
+    }
+    
+    // UI状態更新
+    button.disabled = true;
+    button.textContent = '処理中...';
+    statusDiv.textContent = 'SED音響イベント検出を開始しています...';
+    resultsDiv.classList.add('hidden');
+    resultsContent.textContent = '';
+    
+    try {
+        // SED API (fetch-and-process) に送信
+        const response = await axios.post('http://localhost:8004/fetch-and-process', {
+            device_id: deviceId,
+            date: date,
+            threshold: threshold
+        }, {
+            timeout: 300000 // 5分タイムアウト（処理時間が長いため）
+        });
+        
+        const result = response.data;
+        
+        // 結果表示
+        statusDiv.textContent = '処理が完了しました';
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = JSON.stringify(result, null, 2);
+        
+        // 成功通知
+        const processedCount = result.summary?.supabase_saved || 0;
+        const totalCount = result.summary?.total_time_blocks || 48;
+        const fetchedCount = result.summary?.audio_fetched || 0;
+        
+        showNotification(
+            `SED処理完了: ${fetchedCount}件の音声ファイル取得、${processedCount}/${totalCount}件のタイムブロックを処理してSupabaseに保存しました`, 
+            'success'
+        );
+        
+    } catch (error) {
+        console.error('SED処理エラー:', error);
+        
+        let errorMessage = 'SED音響イベント検出でエラーが発生しました';
+        if (error.response?.data?.detail) {
+            errorMessage += ': ' + error.response.data.detail;
+        } else if (error.message) {
+            errorMessage += ': ' + error.message;
+        }
+        
+        // タイムアウトエラーの特別処理
+        if (error.code === 'ECONNABORTED') {
+            errorMessage = 'SED処理がタイムアウトしました。処理時間が長いため、バックグラウンドで継続している可能性があります。';
+        }
+        
+        statusDiv.textContent = 'エラーが発生しました';
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = errorMessage;
+        
+        showNotification(errorMessage, 'error');
+    } finally {
+        // UI状態復元
+        button.disabled = false;
+        button.textContent = '🎵 SED処理開始';
+    }
+}
+
+// 日付を今日に設定する初期化関数（SED用）
+function initializeSEDDate() {
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    const sedDateElement = document.getElementById('sed-date');
+    if (sedDateElement) {
+        sedDateElement.value = formattedDate;
     }
 }
 

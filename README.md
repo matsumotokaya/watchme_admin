@@ -3,6 +3,41 @@
 **WatchMe システムの管理画面**  
 FastAPIとSupabaseを使用したデバイス・ユーザー管理システムです。
 
+## ⚠️ 重要: Python実行環境について
+
+### 1. Python コマンドについて
+**このプロジェクトでは必ず `python3` コマンドを使用してください。**
+- ❌ 使用禁止: `python`
+- ✅ 必須使用: `python3`
+- ✅ pip も同様: `pip3` を使用
+
+### 2. 仮想環境について
+**このプロジェクトは仮想環境を使用しません。**
+- ❌ 使用禁止: `source venv/bin/activate`
+- ✅ 推奨: グローバルのPython3環境を直接使用
+- 📁 `venv/` フォルダは存在しますが、使用しません
+
+**理由:**
+- 仮想環境とグローバル環境でパッケージバージョンが異なる
+- 混乱を避けるため、グローバル環境で統一
+
+### 3. 必要な環境設定
+```bash
+# 1. 依存関係のインストール（グローバル環境に）
+pip3 install -r requirements.txt
+
+# 2. .envファイルの確認（必須）
+# 以下の2つの設定が必要です：
+# SUPABASE_URL=https://your-project.supabase.co
+# SUPABASE_KEY=your-anon-key
+
+# 3. 起動
+./start.sh
+
+# 4. 停止（必要な場合）
+./stop.sh
+```
+
 ## 🎯 システム概要
 
 ### 🔍 用途・目的
@@ -119,21 +154,31 @@ SUPABASE_KEY=your-anon-key
 
 ### 5. サーバーの起動
 
-#### 🚀 高速起動（推奨）
+#### 🚀 推奨起動方法
 ```bash
-# 高速起動モード（Supabase遅延初期化）
-python3 start_fast.py
+# 起動スクリプト（ポート解放・依存関係確認付き）
+./start.sh
+
+# 停止スクリプト
+./stop.sh
 ```
 
-#### ⚙️ 開発モード起動
+#### ⚡ その他の起動方法
 ```bash
-# リロード機能付き開発モード
+# Python直接実行（最速だが依存関係確認なし）
+python3 start_fast.py
+
+# 開発モード（リロード機能付き）
 python3 main.py
 ```
 
 #### 🔧 手動起動
 ```bash
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --reload
+# 最小限の起動コマンド
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9000
+
+# ログレベル調整版
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --log-level warning
 ```
 
 ## 🌐 API エンドポイント
@@ -593,14 +638,14 @@ NODE_ENV=development
 
 ### 🚀 起動方法
 ```bash
-# 高速起動（推奨）
-python3 start_fast.py
+# 推奨起動方法（ポート解放・依存関係確認付き）
+./start.sh
 
-# 開発モード
-python3 main.py
+# 停止
+./stop.sh
 ```
 
 ---
 
 🎧 **WatchMe**: 音声データから心を読み解く新時代の心理分析システム  
-🚀 **ファストスタート**: `python3 start_fast.py` で今すぐ始められます！
+🚀 **クイックスタート**: `./start.sh` で確実に起動できます！

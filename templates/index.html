@@ -202,18 +202,45 @@
                             </div>
                         </div>
                         
+                        <!-- SED音響イベント検出コンポーネント -->
                         <div class="mt-8">
-                            <div class="bg-green-50 border border-green-200 rounded-lg p-6">
-                                <div class="text-center py-12">
-                                    <div class="text-green-600 text-6xl mb-4">🚧</div>
-                                    <h3 class="text-xl font-medium text-green-900 mb-2">Coming Soon</h3>
-                                    <p class="text-green-700 mb-6">行動パターン分析機能を開発中です</p>
-                                    <div class="bg-green-100 rounded-md p-4 text-sm text-green-800 max-w-md mx-auto">
-                                        <strong>予定機能:</strong><br>
-                                        • 行動パターンの可視化<br>
-                                        • 時間別活動グラフ<br>
-                                        • 行動傾向の分析<br>
-                                        • 移動パターンの把握
+                            <div class="bg-orange-50 border border-orange-200 rounded-lg p-6">
+                                <h3 class="text-lg font-medium text-orange-900 mb-4">🎵 SED音響イベント検出</h3>
+                                <p class="text-sm text-orange-700 mb-4">指定したデバイスIDと日付の音声データを音響イベント検出して、データベースに保存します。</p>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">デバイスID</label>
+                                        <input type="text" id="sed-device-id" placeholder="d067d407-cf73-4174-a9c1-d91fb60d64d0" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">日付</label>
+                                        <input type="date" id="sed-date" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">閾値</label>
+                                        <select id="sed-threshold" class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                            <option value="0.1">0.1（高感度）</option>
+                                            <option value="0.2" selected>0.2（標準）</option>
+                                            <option value="0.3">0.3（低感度）</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 flex justify-between items-center">
+                                    <button id="start-sed-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-orange-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        🎵 SED処理開始
+                                    </button>
+                                    <div id="sed-status" class="text-sm text-gray-500"></div>
+                                </div>
+                                
+                                <!-- 処理結果表示エリア -->
+                                <div id="sed-results" class="mt-6 hidden">
+                                    <h4 class="text-sm font-medium text-gray-700 mb-2">処理結果</h4>
+                                    <div class="bg-gray-50 rounded-md p-4 text-sm">
+                                        <pre id="sed-results-content" class="whitespace-pre-wrap text-gray-600"></pre>
                                     </div>
                                 </div>
                             </div>

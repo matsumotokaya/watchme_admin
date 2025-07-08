@@ -1,5 +1,8 @@
 """
 実際のSupabaseデータ構造に基づく正しいFastAPIアプリケーション
+
+重要: このプロジェクトでは必ず python3 コマンドを使用してください。
+python コマンドではなく、明示的に python3 を使用する必要があります。
 """
 
 from fastapi import FastAPI, HTTPException, Request
