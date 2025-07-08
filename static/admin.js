@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializePromptDate();
     initializeChatGPTDate();
     initializeSEDDate();
+    initializeSEDAggregatorDate();
 });
 
 // =============================================================================
@@ -84,6 +85,9 @@ function setupEventListeners() {
     
     // SED音響イベント検出機能のイベントリスナー
     document.getElementById('start-sed-btn').addEventListener('click', startSEDProcessing);
+    
+    // SED Aggregator機能のイベントリスナー
+    document.getElementById('start-sed-aggregator-btn').addEventListener('click', startSEDAggregatorProcessing);
     
     // モーダルを閉じる
     modalOverlay.addEventListener('click', function(e) {
@@ -1480,6 +1484,109 @@ function initializeSEDDate() {
     const sedDateElement = document.getElementById('sed-date');
     if (sedDateElement) {
         sedDateElement.value = formattedDate;
+    }
+}
+
+// =============================================================================
+// SED Aggregator 行動グラフデータ生成機能
+// =============================================================================
+
+async function startSEDAggregatorProcessing() {
+    const deviceId = document.getElementById('sed-aggregator-device-id').value.trim();
+    const date = document.getElementById('sed-aggregator-date').value;
+    const button = document.getElementById('start-sed-aggregator-btn');
+    const statusDiv = document.getElementById('sed-aggregator-status');
+    const resultsDiv = document.getElementById('sed-aggregator-results');
+    const resultsContent = document.getElementById('sed-aggregator-results-content');
+    
+    // 入力チェック
+    if (!deviceId || !date) {
+        showNotification('デバイスIDと日付を入力してください', 'error');
+        return;
+    }
+    
+    // UUID形式の簡単チェック
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(deviceId)) {
+        showNotification('正しいデバイスIDのフォーマットを入力してください', 'error');
+        return;
+    }
+    
+    // UI状態更新
+    button.disabled = true;
+    button.textContent = '処理中...';
+    statusDiv.textContent = 'SED Aggregator処理を開始しています...';
+    resultsDiv.classList.add('hidden');
+    resultsContent.textContent = '';
+    
+    try {
+        // SED Aggregator API に送信
+        const response = await axios.post('http://localhost:8010/analysis/sed', {
+            device_id: deviceId,
+            date: date
+        }, {
+            timeout: 60000 // 1分タイムアウト
+        });
+        
+        const result = response.data;
+        
+        // 非同期タスクの場合
+        if (result.task_id) {
+            statusDiv.textContent = '処理を開始しました。バックグラウンドで実行中です...';
+            resultsDiv.classList.remove('hidden');
+            resultsContent.textContent = JSON.stringify(result, null, 2);
+            
+            showNotification(`SED Aggregator処理を開始しました: タスクID ${result.task_id}`, 'info');
+            
+            // タスクIDを保存して、後でステータス確認できるようにする
+            const taskInfo = `タスクID: ${result.task_id}\n` +
+                           `デバイスID: ${deviceId}\n` +
+                           `日付: ${date}\n` +
+                           `ステータス確認URL: http://localhost:8010/analysis/sed/${result.task_id}`;
+            resultsContent.textContent = taskInfo;
+        } else {
+            // 同期処理の結果の場合（既存のコード）
+            statusDiv.textContent = '処理が完了しました';
+            resultsDiv.classList.remove('hidden');
+            resultsContent.textContent = JSON.stringify(result, null, 2);
+            
+            const savedCount = result.data_saved ? 1 : 0;
+            const message = savedCount > 0 
+                ? `SED Aggregator処理完了: ${date}の行動グラフデータをSupabaseに保存しました` 
+                : `SED Aggregator処理完了: ${date}のデータは既に存在するか、処理対象がありませんでした`;
+            
+            showNotification(message, savedCount > 0 ? 'success' : 'info');
+        }
+        
+    } catch (error) {
+        console.error('SED Aggregator処理エラー:', error);
+        
+        let errorMessage = 'SED Aggregator処理でエラーが発生しました';
+        if (error.response?.data?.detail) {
+            errorMessage += ': ' + error.response.data.detail;
+        } else if (error.message) {
+            errorMessage += ': ' + error.message;
+        }
+        
+        statusDiv.textContent = 'エラーが発生しました';
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = errorMessage;
+        
+        showNotification(errorMessage, 'error');
+    } finally {
+        // UI状態復元
+        button.disabled = false;
+        button.textContent = '📊 集約処理開始';
+    }
+}
+
+// 日付を今日に設定する初期化関数（SED Aggregator用）
+function initializeSEDAggregatorDate() {
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    const sedAggregatorDateElement = document.getElementById('sed-aggregator-date');
+    if (sedAggregatorDateElement) {
+        sedAggregatorDateElement.value = formattedDate;
     }
 }
 

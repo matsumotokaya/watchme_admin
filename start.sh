@@ -51,4 +51,20 @@ echo "================================="
 echo ""
 
 # uvicornで起動（ログレベルは警告以上のみ表示）
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --log-level warning
+# バックグラウンドで起動してPIDを保存
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --log-level warning &
+SERVER_PID=$!
+echo ""
+echo "✅ サーバーが起動しました (PID: $SERVER_PID)"
+echo "🌐 ブラウザで http://localhost:9000 にアクセスしてください"
+
+# PIDをファイルに保存（stop.shで使用）
+echo $SERVER_PID > .server.pid
+
+# 起動確認（3秒待機）
+sleep 3
+if lsof -i :9000 >/dev/null 2>&1; then
+    echo "✅ サーバーは正常に動作しています"
+else
+    echo "⚠️  サーバーの起動に失敗した可能性があります"
+fi
