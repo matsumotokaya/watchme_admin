@@ -66,49 +66,9 @@ async def read_root(request: Request):
 
 
 # =============================================================================
-# Auth Users API - auth.usersテーブル（認証ユーザー管理）
+# Auth Users API - 削除済み（権限エラーのため）
 # =============================================================================
-
-@app.get("/api/auth-users")
-async def get_auth_users():
-    """auth.usersテーブルから認証ユーザーを取得"""
-    try:
-        # SQL関数を使用してauth.usersテーブルにアクセス
-        client = get_supabase_client()
-        result = client.client.rpc('get_auth_users').execute()
-        
-        if result.data:
-            return {"auth_users": result.data}
-        else:
-            # SQL関数が存在しない場合はダミーデータを返す
-            return {
-                "auth_users": [
-                    {
-                        "id": "ダミーID",
-                        "email": "example@example.com",
-                        "raw_user_meta_data": {"note": "auth.users用のSQL関数が必要です"},
-                        "created_at": "2025-07-04T12:00:00Z",
-                        "updated_at": "2025-07-04T12:00:00Z",
-                        "last_sign_in_at": None,
-                        "email_confirmed_at": "2025-07-04T12:00:00Z"
-                    }
-                ]
-            }
-    except Exception as e:
-        # エラーの場合はダミーデータで説明を返す
-        return {
-            "auth_users": [
-                {
-                    "id": "エラー",
-                    "email": "権限エラー",
-                    "raw_user_meta_data": {"error": str(e), "solution": "Supabase管理者権限またはRLS設定が必要"},
-                    "created_at": "2025-07-04T12:00:00Z",
-                    "updated_at": "2025-07-04T12:00:00Z",
-                    "last_sign_in_at": None,
-                    "email_confirmed_at": None
-                }
-            ]
-        }
+# auth.usersテーブルは管理者権限でしかアクセスできないため削除
 
 # =============================================================================
 # Users API - 実際のフィールド構造に基づく
@@ -176,123 +136,9 @@ async def create_device(device: DeviceCreate):
 
 
 # =============================================================================
-# ViewerLinks API - 正しい関係性に基づく
+# ViewerLinks API - 削除済み（機能廃止）
 # =============================================================================
-
-@app.get("/api/viewer-links", response_model=List[ViewerLink])
-async def get_all_viewer_links():
-    """全てのViewerLinkを取得"""
-    try:
-        links = await supabase_client.select("viewer_links")
-        return links
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"ViewerLinkの取得に失敗しました: {str(e)}")
-
-
-@app.get("/api/viewer-links/details", response_model=List[ViewerLinkWithDetails])
-async def get_viewer_links_with_details():
-    """ViewerLinkをユーザーとデバイス情報付きで取得"""
-    try:
-        # ViewerLinksを取得
-        links = await supabase_client.select("viewer_links")
-        
-        # ユーザーとデバイス情報を並行取得
-        users = await supabase_client.select("users")
-        devices = await supabase_client.select("devices")
-        
-        # 辞書化して高速ルックアップ
-        users_dict = {user["user_id"]: user for user in users}
-        devices_dict = {device["device_id"]: device for device in devices}
-        
-        # 詳細情報を結合
-        detailed_links = []
-        for link in links:
-            user = users_dict.get(link["user_id"])
-            device = devices_dict.get(link["device_id"])
-            
-            if user and device:
-                # is_activeを計算
-                now = datetime.now()
-                start_time = datetime.fromisoformat(link["start_time"]) if link.get("start_time") else None
-                end_time = datetime.fromisoformat(link["end_time"]) if link.get("end_time") else None
-                is_active = False
-                if start_time and end_time:
-                    is_active = start_time <= now <= end_time
-                
-                detailed_link = ViewerLinkWithDetails(
-                    viewer_link_id=link["viewer_link_id"],
-                    user_id=link["user_id"],
-                    user_name=user["name"],
-                    user_email=user["email"],
-                    device_id=link["device_id"],
-                    device_type=device["device_type"],
-                    device_status=device.get("status", DeviceStatus.ACTIVE),
-                    start_time=start_time,
-                    end_time=end_time,
-                    is_active=is_active
-                )
-                detailed_links.append(detailed_link)
-        
-        return detailed_links
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"詳細ViewerLinkの取得に失敗しました: {str(e)}")
-
-
-@app.get("/api/viewer-links/by-user/{user_id}", response_model=List[ViewerLink])
-async def get_user_viewer_links(user_id: str):
-    """特定ユーザーのViewerLinkを取得"""
-    try:
-        links = await supabase_client.select("viewer_links", filters={"user_id": user_id})
-        return links
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"ユーザーのViewerLink取得に失敗しました: {str(e)}")
-
-
-@app.post("/api/viewer-links", response_model=ViewerLink)
-async def create_viewer_link(viewer_link: ViewerLinkCreate):
-    """新しいViewerLinkを作成（ユーザーとデバイスを関連付け）"""
-    try:
-        # ユーザーとデバイスの存在確認
-        user_exists = await supabase_client.select("users", filters={"user_id": viewer_link.user_id})
-        device_exists = await supabase_client.select("devices", filters={"device_id": viewer_link.device_id})
-        
-        if not user_exists:
-            raise HTTPException(status_code=404, detail="指定されたユーザーが見つかりません")
-        if not device_exists:
-            raise HTTPException(status_code=404, detail="指定されたデバイスが見つかりません")
-        
-        # start_time, end_timeは必須
-        if not viewer_link.start_time or not viewer_link.end_time:
-            raise HTTPException(status_code=400, detail="start_timeとend_timeは必須です")
-            
-        link_data = {
-            "viewer_link_id": str(uuid.uuid4()),
-            "user_id": viewer_link.user_id,
-            "device_id": viewer_link.device_id,
-            "start_time": viewer_link.start_time.isoformat(),
-            "end_time": viewer_link.end_time.isoformat()
-        }
-        created_link = await supabase_client.insert("viewer_links", link_data)
-        return created_link
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"ViewerLinkの作成に失敗しました: {str(e)}")
-
-
-@app.delete("/api/viewer-links/{link_id}", response_model=ResponseModel)
-async def delete_viewer_link(link_id: str):
-    """ViewerLinkを削除"""
-    try:
-        success = await supabase_client.delete("viewer_links", {"viewer_link_id": link_id})
-        if success:
-            return ResponseModel(success=True, message="ViewerLinkが正常に削除されました")
-        else:
-            raise HTTPException(status_code=404, detail="ViewerLinkが見つかりません")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"ViewerLinkの削除に失敗しました: {str(e)}")
+# ViewerLinks機能は削除されました
 
 
 # =============================================================================
@@ -547,151 +393,9 @@ async def get_graph(graph_id: str):
 
 
 # =============================================================================
-# 閲覧権限・時間制御API - WatchMe用ユーザー管理
+# 閲覧権限・時間制御API - 削除済み（機能廃止）
 # =============================================================================
-
-@app.get("/api/my-devices", response_model=List[MyDeviceInfo])
-async def get_my_devices(user_id: str = Query(..., description="ユーザーID")):
-    """ログインユーザーのリンク済みデバイス一覧を取得"""
-    try:
-        # ユーザーの存在確認
-        user = await supabase_client.select("users", filters={"user_id": user_id})
-        if not user:
-            raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
-        
-        # ユーザーのViewerLinkを取得
-        viewer_links = await supabase_client.select("viewer_links", filters={"user_id": user_id})
-        
-        # デバイス情報を取得
-        devices = await supabase_client.select("devices")
-        devices_dict = {device["device_id"]: device for device in devices}
-        
-        # マイデバイス情報を構築
-        my_devices = []
-        for link in viewer_links:
-            device = devices_dict.get(link["device_id"])
-            if device:
-                # 現在アクティブかどうかを判定
-                now = datetime.now()
-                start_time = datetime.fromisoformat(link["start_time"]) if link.get("start_time") else None
-                end_time = datetime.fromisoformat(link["end_time"]) if link.get("end_time") else None
-                is_active = False
-                if start_time and end_time:
-                    is_active = start_time <= now <= end_time
-                
-                my_device = MyDeviceInfo(
-                    device_id=device["device_id"],
-                    device_type=device["device_type"],
-                    device_status=device.get("status", DeviceStatus.ACTIVE),
-                    last_sync=datetime.fromisoformat(device["last_sync"]) if device.get("last_sync") else None,
-                    viewer_link_id=link["viewer_link_id"],
-                    start_time=start_time,
-                    end_time=end_time,
-                    is_active=is_active,
-                    total_audio_count=device.get("total_audio_count", 0),
-                    latest_graph_count=0  # 将来的にgraph_dataテーブルから取得
-                )
-                my_devices.append(my_device)
-        
-        return my_devices
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"デバイス一覧取得に失敗しました: {str(e)}")
-
-
-@app.post("/api/viewer-links/validate", response_model=ResponseModel)
-async def validate_viewer_link(link_request: DeviceLinkRequest):
-    """閲覧権限を検証"""
-    try:
-        # ViewerLinkの存在確認
-        viewer_links = await supabase_client.select("viewer_links", filters={
-            "device_id": link_request.device_id
-        })
-        
-        if not viewer_links:
-            return ResponseModel(success=False, message="該当するViewerLinkが見つかりません")
-        
-        # 時間範囲の検証
-        now = datetime.now()
-        valid_links = []
-        
-        for link in viewer_links:
-            start_time = datetime.fromisoformat(link["start_time"]) if link.get("start_time") else None
-            end_time = datetime.fromisoformat(link["end_time"]) if link.get("end_time") else None
-            
-            if start_time and end_time:
-                # リクエストされた時間範囲が許可範囲内かどうかをチェック
-                if (link_request.start_time >= start_time and 
-                    link_request.end_time <= end_time and
-                    start_time <= now <= end_time):
-                    valid_links.append(link)
-        
-        if valid_links:
-            return ResponseModel(
-                success=True, 
-                message="閲覧権限が確認されました",
-                data={"valid_links_count": len(valid_links)}
-            )
-        else:
-            return ResponseModel(success=False, message="指定された時間範囲での閲覧権限がありません")
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"閲覧権限検証に失敗しました: {str(e)}")
-
-
-@app.get("/api/viewer-links/{user_id}/timeline", response_model=List[ViewerLinkWithDetails])
-async def get_user_timeline(user_id: str):
-    """ユーザーの閲覧履歴タイムラインを取得"""
-    try:
-        # ユーザーの存在確認
-        user = await supabase_client.select("users", filters={"user_id": user_id})
-        if not user:
-            raise HTTPException(status_code=404, detail="ユーザーが見つかりません")
-        
-        # ユーザーのViewerLinkを時系列順で取得
-        viewer_links = await supabase_client.select("viewer_links", filters={"user_id": user_id})
-        
-        # デバイス情報を取得
-        devices = await supabase_client.select("devices")
-        devices_dict = {device["device_id"]: device for device in devices}
-        
-        timeline = []
-        for link in viewer_links:
-            device = devices_dict.get(link["device_id"])
-            if device:
-                # タイムライン情報を構築
-                start_time = datetime.fromisoformat(link["start_time"]) if link.get("start_time") else None
-                end_time = datetime.fromisoformat(link["end_time"]) if link.get("end_time") else None
-                
-                # 現在アクティブかどうかを判定
-                now = datetime.now()
-                is_active = False
-                if start_time and end_time:
-                    is_active = start_time <= now <= end_time
-                
-                timeline_item = ViewerLinkWithDetails(
-                    viewer_link_id=link["viewer_link_id"],
-                    user_id=user_id,
-                    user_name=user[0]["name"],
-                    user_email=user[0]["email"],
-                    device_id=device["device_id"],
-                    device_type=device["device_type"],
-                    device_status=device.get("status", DeviceStatus.ACTIVE),
-                    start_time=start_time,
-                    end_time=end_time,
-                    is_active=is_active
-                )
-                timeline.append(timeline_item)
-        
-        # 開始時刻順でソート
-        timeline.sort(key=lambda x: x.start_time if x.start_time else datetime.min)
-        
-        return timeline
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"タイムライン取得に失敗しました: {str(e)}")
+# ViewerLink関連機能は削除されました
 
 
 # =============================================================================
@@ -702,23 +406,14 @@ async def get_user_timeline(user_id: str):
 async def get_stats():
     """システム統計情報を取得"""
     try:
-        users = await supabase_client.select("users")
-        devices = await supabase_client.select("devices")
-        viewer_links = await supabase_client.select("viewer_links")
+        client = get_supabase_client()
+        users = await client.select("users")
+        devices = await client.select("devices")
         
         # アクティブデバイス数を計算
-        active_devices_count = len([d for d in devices if d.get("status") == DeviceStatus.ACTIVE])
+        active_devices_count = len([d for d in devices if d.get("status") == "active"])
         
-        # アクティブリンク数を計算
-        now = datetime.now()
-        active_links_count = 0
-        for link in viewer_links:
-            start_time = datetime.fromisoformat(link["start_time"]) if link.get("start_time") else None
-            end_time = datetime.fromisoformat(link["end_time"]) if link.get("end_time") else None
-            if start_time and end_time and start_time <= now <= end_time:
-                active_links_count += 1
-        
-        # 音声・グラフ総数（将来のテーブル実装時に更新）
+        # 音声・グラフ総数
         total_audio_count = sum(d.get("total_audio_count", 0) for d in devices)
         total_graph_count = 0  # graph_dataテーブル実装時に更新
         
@@ -726,8 +421,8 @@ async def get_stats():
             users_count=len(users),
             devices_count=len(devices),
             active_devices_count=active_devices_count,
-            viewer_links_count=len(viewer_links),
-            active_links_count=active_links_count,
+            viewer_links_count=0,  # viewer_links機能は削除
+            active_links_count=0,  # viewer_links機能は削除
             total_audio_count=total_audio_count,
             total_graph_count=total_graph_count,
             timestamp=datetime.now()

@@ -65,6 +65,13 @@ echo $SERVER_PID > .server.pid
 sleep 3
 if lsof -i :9000 >/dev/null 2>&1; then
     echo "✅ サーバーは正常に動作しています"
+    
+    # 複数プロセスのチェック
+    PROCESS_COUNT=$(lsof -ti :9000 | wc -l)
+    if [ $PROCESS_COUNT -gt 1 ]; then
+        echo "⚠️  複数のプロセスが検出されました ($PROCESS_COUNT 個)"
+        echo "💡 ./check_processes.sh で詳細を確認してください"
+    fi
 else
     echo "⚠️  サーバーの起動に失敗した可能性があります"
 fi

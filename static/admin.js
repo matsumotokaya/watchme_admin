@@ -4,7 +4,6 @@
  */
 
 // グローバル変数
-let currentAuthUsers = [];
 let currentUsers = [];
 let currentDevices = [];
 
@@ -105,7 +104,7 @@ async function loadAllData() {
     console.log('全データ読み込み開始');
     try {
         await Promise.all([
-            loadAuthUsers(),
+            // loadAuthUsers(), - 削除済み（権限エラーのため）
             loadUsers(),
             loadDevices()
         ]);
@@ -116,17 +115,8 @@ async function loadAllData() {
     }
 }
 
-async function loadAuthUsers() {
-    try {
-        const response = await axios.get('/api/auth-users');
-        currentAuthUsers = response.data.auth_users;
-        renderAuthUsersTable();
-        console.log(`認証ユーザー ${currentAuthUsers.length} 件読み込み完了`);
-    } catch (error) {
-        console.error('認証ユーザー読み込みエラー:', error);
-        showNotification('認証ユーザーの読み込みに失敗しました', 'error');
-    }
-}
+// async function loadAuthUsers() - 削除済み（権限エラーのため）
+// auth.usersテーブルは管理者権限でしかアクセスできないため削除
 
 async function loadUsers() {
     try {
@@ -173,39 +163,8 @@ async function loadStats() {
 // テーブル描画関数群
 // =============================================================================
 
-function renderAuthUsersTable() {
-    const tbody = document.getElementById('auth-users-table-body');
-    tbody.innerHTML = '';
-    
-    if (currentAuthUsers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-4 text-center text-gray-500">認証ユーザーがありません</td></tr>';
-        return;
-    }
-    
-    currentAuthUsers.forEach(authUser => {
-        const row = document.createElement('tr');
-        
-        // メタデータの表示処理
-        const metadata = authUser.raw_user_meta_data;
-        const metadataDisplay = metadata ? 
-            Object.keys(metadata).map(key => `${key}: ${metadata[key]}`).join(', ') : 
-            '<span class="text-gray-400">-</span>';
-        
-        row.innerHTML = `
-            <td class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title="${authUser.id}">${authUser.id.substring(0, 8)}...</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">${authUser.email || '<span class="text-gray-400">未設定</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500" title="${JSON.stringify(metadata)}">${metadataDisplay}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(authUser.created_at)}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${authUser.updated_at ? formatDate(authUser.updated_at) : '<span class="text-gray-400">-</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${authUser.last_sign_in_at ? formatDate(authUser.last_sign_in_at) : '<span class="text-gray-400">-</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${authUser.email_confirmed_at ? formatDate(authUser.email_confirmed_at) : '<span class="text-gray-400">未確認</span>'}</td>
-            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onclick="viewAuthUserDetails('${authUser.id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="詳細表示">👁️</button>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
-}
+// function renderAuthUsersTable() - 削除済み（権限エラーのため）
+// auth.usersテーブルは管理者権限でしかアクセスできないため削除
 
 function renderUsersTable() {
     const tbody = document.getElementById('users-table-body');

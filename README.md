@@ -621,9 +621,36 @@ NODE_ENV=development
 
 ---
 
-## 🔧 最新のアップデート（2025-07-07）
+## 🔧 最新のアップデート（2025-07-08）
 
-### ✨ 新機能・改善点
+### ✨ 新機能・改善点（2025-07-08）
+- **🆕 SED Aggregator機能追加**: 行動グラフタブにSED音響イベント集約機能を追加
+- **🔧 CORS設定修正**: SED Aggregator APIに適切なCORS設定を追加してネットワークエラーを解決
+- **🛠️ 起動スクリプト統合**: 複数の起動スクリプトを統合し、PID管理と重複プロセス検出機能を実装
+- **🧹 auth.users機能完全削除**: 権限エラーを防ぐためauth.usersテーブルへの参照を完全に削除
+- **🎯 統計API修正**: viewer_linksテーブルへの参照を削除し、統計情報を正常化
+- **🔄 プロセス管理強化**: 
+  - PIDファイルによる重複プロセス検出
+  - 自動ポート解放機能（lsof + kill）
+  - プロセス状況確認スクリプト（check_processes.sh）
+  - 安全な再起動スクリプト（restart.sh）
+- **📋 起動方法の最適化**: 統合された起動・停止スクリプトで確実な動作を実現
+
+### 🔧 起動関連の改善
+- **統合起動スクリプト**: `start.sh` - PID管理、ポート解放、依存関係確認
+- **統合停止スクリプト**: `stop.sh` - PIDファイル管理、確実なプロセス終了
+- **プロセス確認**: `check_processes.sh` - 重複プロセス検出とトラブルシューティング
+- **安全な再起動**: `restart.sh` - 完全停止後の新規起動
+
+### 🛠️ 技術的修正
+- **SED Aggregator API**: `api_sed-aggregator_v1/api_server.py` にCORS設定を追加
+- **統計API**: `main.py` から viewer_links テーブルへの参照を削除
+- **フロントエンド**: `admin.js` から auth.users 関連の処理を完全削除
+- **UI修正**: `index.html` から auth.users タブとテーブルを削除
+
+### 🔧 最新のアップデート（2025-07-07）
+
+### ✨ 新機能・改善点（2025-07-07）
 - **🆕 Whisper API Supabase統合完了**: JSONファイル出力からSupabaseデータベース（vibe_whisperテーブル）への直接保存に移行
 - **🆕 プロンプト生成API Supabase統合**: vibe_whisperテーブルから読み込み、vibe_whisper_promptテーブルに保存
 - **🆕 ChatGPT処理API Supabase統合**: vibe_whisper_promptテーブルから読み込み、vibe_whisper_summaryテーブルに保存
