@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeChatGPTDate();
     initializeSEDDate();
     initializeSEDAggregatorDate();
+    initializeOpenSMILEDate();
 });
 
 // =============================================================================
@@ -87,6 +88,9 @@ function setupEventListeners() {
     
     // SED Aggregator機能のイベントリスナー
     document.getElementById('start-sed-aggregator-btn').addEventListener('click', startSEDAggregatorProcessing);
+    
+    // OpenSMILE機能のイベントリスナー
+    document.getElementById('start-opensmile-btn').addEventListener('click', startOpenSMILEProcessing);
     
     // モーダルを閉じる
     modalOverlay.addEventListener('click', function(e) {
@@ -1546,6 +1550,107 @@ function initializeSEDAggregatorDate() {
     const sedAggregatorDateElement = document.getElementById('sed-aggregator-date');
     if (sedAggregatorDateElement) {
         sedAggregatorDateElement.value = formattedDate;
+    }
+}
+
+// =============================================================================
+// OpenSMILE 音声特徴量抽出機能
+// =============================================================================
+
+/**
+ * OpenSMILE処理を開始
+ */
+async function startOpenSMILEProcessing() {
+    const deviceId = document.getElementById('opensmile-device-id').value.trim();
+    const date = document.getElementById('opensmile-date').value;
+    const button = document.getElementById('start-opensmile-btn');
+    const statusDiv = document.getElementById('opensmile-status');
+    const resultsDiv = document.getElementById('opensmile-results');
+    const resultsContent = document.getElementById('opensmile-results-content');
+    
+    // バリデーション
+    if (!deviceId || !date) {
+        showNotification('デバイスIDと日付を入力してください', 'error');
+        return;
+    }
+    
+    // UUID形式チェック
+    const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+    if (!uuidRegex.test(deviceId)) {
+        showNotification('デバイスIDはUUID形式で入力してください', 'error');
+        return;
+    }
+    
+    try {
+        // UI更新
+        button.disabled = true;
+        statusDiv.textContent = '処理中...';
+        statusDiv.className = 'text-sm text-green-600';
+        resultsDiv.classList.add('hidden');
+        
+        // APIリクエスト
+        const response = await axios.post('http://localhost:8011/process/vault-data', {
+            device_id: deviceId,
+            date: date,
+            feature_set: 'eGeMAPSv02'
+        }, {
+            timeout: 120000  // 2分タイムアウト（OpenSMILEは処理に時間がかかる場合がある）
+        });
+        
+        if (response.data.success) {
+            // 成功メッセージ
+            const message = response.data.message || 'OpenSMILE処理が完了しました';
+            showNotification(message, 'success');
+            statusDiv.textContent = '処理完了';
+            statusDiv.className = 'text-sm text-green-600';
+            
+            // 結果表示
+            resultsDiv.classList.remove('hidden');
+            const resultText = `処理日付: ${date}
+デバイスID: ${deviceId}
+処理ファイル数: ${response.data.processed_files}
+保存ファイル数: ${response.data.saved_files.length}
+総処理時間: ${response.data.total_processing_time.toFixed(2)}秒
+
+処理されたスロット:
+${response.data.saved_files.map(file => `  - ${file}`).join('\n')}`;
+            
+            resultsContent.textContent = resultText;
+            
+            // エラーがあった場合は表示
+            const errors = response.data.results.filter(r => r.error);
+            if (errors.length > 0) {
+                resultsContent.textContent += `\n\nエラー:
+${errors.map(e => `  - ${e.slot}: ${e.error}`).join('\n')}`;
+            }
+        } else {
+            throw new Error(response.data.error || 'OpenSMILE処理に失敗しました');
+        }
+        
+    } catch (error) {
+        console.error('OpenSMILE処理エラー:', error);
+        const errorMessage = error.response?.data?.detail || error.message || 'OpenSMILE処理中にエラーが発生しました';
+        showNotification(errorMessage, 'error');
+        statusDiv.textContent = 'エラー';
+        statusDiv.className = 'text-sm text-red-600';
+        
+        // エラー詳細を結果エリアに表示
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = `エラー: ${errorMessage}`;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+/**
+ * OpenSMILE日付フィールドを今日の日付で初期化
+ */
+function initializeOpenSMILEDate() {
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    const opensmileDateElement = document.getElementById('opensmile-date');
+    if (opensmileDateElement) {
+        opensmileDateElement.value = formattedDate;
     }
 }
 

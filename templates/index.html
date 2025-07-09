@@ -290,12 +290,49 @@
                             </div>
                         </div>
                         
+                        <!-- OpenSMILEコンポーネント -->
+                        <div class="mt-8">
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-6">
+                                <h3 class="text-lg font-medium text-green-900 mb-4">🎵 OpenSMILE音声特徴量抽出</h3>
+                                <p class="text-sm text-green-700 mb-4">指定したデバイスIDと日付の音声データから感情特徴量を抽出して、Supabaseに保存します。</p>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">デバイスID</label>
+                                        <input type="text" id="opensmile-device-id" placeholder="d067d407-cf73-4174-a9c1-d91fb60d64d0" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">日付</label>
+                                        <input type="date" id="opensmile-date" 
+                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4 flex justify-between items-center">
+                                    <button id="start-opensmile-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        🎵 OpenSMILE処理開始
+                                    </button>
+                                    <div id="opensmile-status" class="text-sm text-gray-500"></div>
+                                </div>
+                                
+                                <!-- 処理結果表示エリア -->
+                                <div id="opensmile-results" class="mt-6 hidden">
+                                    <h4 class="text-sm font-medium text-gray-700 mb-2">処理結果</h4>
+                                    <div class="bg-gray-50 rounded-md p-4 text-sm">
+                                        <pre id="opensmile-results-content" class="whitespace-pre-wrap text-gray-600"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 既存のComing Soonコンテンツ -->
                         <div class="mt-8">
                             <div class="bg-pink-50 border border-pink-200 rounded-lg p-6">
                                 <div class="text-center py-12">
                                     <div class="text-pink-600 text-6xl mb-4">🚧</div>
-                                    <h3 class="text-xl font-medium text-pink-900 mb-2">Coming Soon</h3>
-                                    <p class="text-pink-700 mb-6">感情分析機能を開発中です</p>
+                                    <h3 class="text-xl font-medium text-pink-900 mb-2">感情グラフ可視化</h3>
+                                    <p class="text-pink-700 mb-6">感情グラフの可視化機能を開発中です</p>
                                     <div class="bg-pink-100 rounded-md p-4 text-sm text-pink-800 max-w-md mx-auto">
                                         <strong>予定機能:</strong><br>
                                         • 感情スコアの可視化<br>
