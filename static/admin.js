@@ -92,6 +92,9 @@ function setupEventListeners() {
     // OpenSMILE機能のイベントリスナー
     document.getElementById('start-opensmile-btn').addEventListener('click', startOpenSMILEProcessing);
     
+    // OpenSMILE Aggregator機能のイベントリスナー
+    document.getElementById('start-aggregator-btn').addEventListener('click', startOpenSMILEAggregator);
+    
     // モーダルを閉じる
     modalOverlay.addEventListener('click', function(e) {
         if (e.target === modalOverlay) {
@@ -1651,6 +1654,135 @@ function initializeOpenSMILEDate() {
     const opensmileDateElement = document.getElementById('opensmile-date');
     if (opensmileDateElement) {
         opensmileDateElement.value = formattedDate;
+    }
+    // OpenSMILE Aggregatorの日付も初期化
+    const aggregatorDateElement = document.getElementById('aggregator-date');
+    if (aggregatorDateElement) {
+        aggregatorDateElement.value = formattedDate;
+    }
+}
+
+// =============================================================================
+// OpenSMILE Aggregator 感情集計機能
+// =============================================================================
+
+/**
+ * OpenSMILE Aggregator処理を開始
+ */
+async function startOpenSMILEAggregator() {
+    const deviceId = document.getElementById('aggregator-device-id').value.trim();
+    const date = document.getElementById('aggregator-date').value;
+    const button = document.getElementById('start-aggregator-btn');
+    const statusDiv = document.getElementById('aggregator-status');
+    const resultsDiv = document.getElementById('aggregator-results');
+    const resultsContent = document.getElementById('aggregator-results-content');
+    
+    // バリデーション
+    if (!deviceId || !date) {
+        showNotification('デバイスIDと日付を入力してください', 'error');
+        return;
+    }
+    
+    // UUID形式チェック
+    const uuidRegex = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+    if (!uuidRegex.test(deviceId)) {
+        showNotification('デバイスIDはUUID形式で入力してください', 'error');
+        return;
+    }
+    
+    try {
+        // UI更新
+        button.disabled = true;
+        button.textContent = '処理中...';
+        statusDiv.textContent = '感情集計処理を開始しています...';
+        statusDiv.className = 'text-sm text-purple-600';
+        resultsDiv.classList.add('hidden');
+        
+        // APIリクエスト（タスクの開始）
+        const startResponse = await axios.post('http://localhost:8012/analyze/opensmile-aggregator', {
+            device_id: deviceId,
+            date: date
+        }, {
+            timeout: 30000  // 30秒タイムアウト
+        });
+        
+        const taskId = startResponse.data.task_id;
+        statusDiv.textContent = `処理中... (タスクID: ${taskId})`;
+        
+        // タスクの完了を確認（ポーリング）
+        let taskComplete = false;
+        let taskResult = null;
+        let pollCount = 0;
+        const maxPolls = 60;  // 最大60回（60秒）
+        
+        while (!taskComplete && pollCount < maxPolls) {
+            await new Promise(resolve => setTimeout(resolve, 1000));  // 1秒待機
+            
+            try {
+                const statusResponse = await axios.get(`http://localhost:8012/analyze/opensmile-aggregator/${taskId}`);
+                taskResult = statusResponse.data;
+                
+                if (taskResult.status === 'completed') {
+                    taskComplete = true;
+                } else if (taskResult.status === 'failed') {
+                    throw new Error(taskResult.error || '処理に失敗しました');
+                } else {
+                    statusDiv.textContent = `処理中... (タスクID: ${taskId}, 進行状況: ${taskResult.progress}%)`;
+                }
+            } catch (error) {
+                // タスク状態確認でエラーが発生した場合は続行
+                console.warn('タスク状態確認エラー:', error);
+            }
+            
+            pollCount++;
+        }
+        
+        if (!taskComplete) {
+            throw new Error('処理がタイムアウトしました。バックグラウンドで処理が継続されている可能性があります。');
+        }
+        
+        // 成功メッセージ
+        const hasData = taskResult.result?.has_data;
+        const message = taskResult.message || 'OpenSMILE Aggregator処理が完了しました';
+        
+        if (!hasData) {
+            showNotification(message, 'info');
+            statusDiv.textContent = 'データなし（空データを保存）';
+            statusDiv.className = 'text-sm text-orange-600';
+        } else {
+            showNotification('OpenSMILE Aggregator処理が完了しました', 'success');
+            statusDiv.textContent = '処理完了';
+            statusDiv.className = 'text-sm text-green-600';
+        }
+        
+        // 結果表示
+        resultsDiv.classList.remove('hidden');
+        const processedSlots = taskResult.result?.processed_slots || 0;
+        const totalEmotionPoints = taskResult.result?.total_emotion_points || 0;
+        const resultText = `処理日付: ${date}
+デバイスID: ${deviceId}
+データ状態: ${hasData ? 'データあり' : 'データなし'}
+処理スロット数: ${processedSlots}/48
+総感情ポイント: ${totalEmotionPoints}
+ステータス: ${taskResult.status}
+
+結果はemotion_opensmile_summaryテーブルに保存されました。`;
+        
+        resultsContent.textContent = resultText;
+        
+    } catch (error) {
+        console.error('OpenSMILE Aggregator処理エラー:', error);
+        const errorMessage = error.response?.data?.detail || error.message || 'OpenSMILE Aggregator処理中にエラーが発生しました';
+        showNotification(errorMessage, 'error');
+        statusDiv.textContent = 'エラー';
+        statusDiv.className = 'text-sm text-red-600';
+        
+        // エラー詳細を結果エリアに表示
+        resultsDiv.classList.remove('hidden');
+        resultsContent.textContent = `エラー: ${errorMessage}`;
+    } finally {
+        button.disabled = false;
+        button.textContent = '📊 集計処理開始';
     }
 }
 
