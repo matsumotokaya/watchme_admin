@@ -78,6 +78,13 @@ pip3 install -r requirements.txt
 - 認証ユーザーとの統合
 - UUID形式IDの全文表示とワンクリックコピー機能
 
+#### 🔔 通知管理
+- **個別通知作成**: 特定のユーザーに個別メッセージを送信
+- **一括通知送信**: 全ユーザーまたは指定ユーザーへの同時送信
+- **通知統計ダッシュボード**: 総通知数・未読数・タイプ別集計の可視化
+- **通知履歴管理**: 送信済み通知の詳細確認・削除機能
+- **リアルタイム連携**: WatchMe v8ダッシュボードへの即座な通知表示
+
 ## 📊 データベース構造
 
 ### users テーブル
@@ -101,6 +108,17 @@ pip3 install -r requirements.txt
 - `last_sync` (DateTime, Optional) - 最終同期時刻
 - `total_audio_count` (Integer) - 総音声データ数
 - `qr_code` (String, Optional) - QRコード情報
+
+### notifications テーブル - 通知管理
+- `id` (UUID, Primary Key) - 通知ID
+- `user_id` (UUID, users.user_id外部キー) - 通知対象ユーザー
+- `type` (String) - 通知タイプ ('announcement', 'event', 'system')
+- `title` (String) - 通知タイトル
+- `message` (String) - 通知メッセージ
+- `is_read` (Boolean) - 既読フラグ（デフォルト: false）
+- `created_at` (DateTime) - 作成日時
+- `triggered_by` (String, Optional) - 送信者・システム名
+- `metadata` (JSONB, Optional) - 追加メタデータ
 
 
 
@@ -197,6 +215,15 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --log-level warning
 - `POST /api/devices/{device_id}/audio` - 音声データアップロード
 - `GET /api/devices/{device_id}/audio` - デバイスの音声データ一覧取得
 
+### 🔔 通知管理 API
+- `GET /api/notifications` - すべての通知を取得（管理画面用）
+- `GET /api/notifications/user/{user_id}` - 特定ユーザーの通知を取得
+- `POST /api/notifications` - 新しい通知を作成
+- `POST /api/notifications/broadcast` - 一括通知送信
+- `PUT /api/notifications/{notification_id}` - 通知を更新（既読状態など）
+- `DELETE /api/notifications/{notification_id}` - 通知を削除
+- `GET /api/notifications/stats` - 通知統計情報を取得
+
 ### 🧠 Whisper統合 API
 - **外部API**: `POST http://localhost:8001/fetch-and-transcribe` - Whisper音声文字起こし処理
 
@@ -212,11 +239,11 @@ admin/
 ├── api/
 │   └── supabase_client.py       # Supabase接続クライアント
 ├── models/
-│   └── schemas.py               # WatchMe対応 Pydanticモデル定義
+│   └── schemas.py               # WatchMe対応 Pydanticモデル定義（通知管理含む）
 ├── templates/
 │   └── index.html               # WatchMe管理画面 (音声心理分析UI)
 ├── static/
-│   └── admin.js                 # WatchMeフロントエンド (グラフ、QRコード、デバイス管理)
+│   └── admin.js                 # WatchMeフロントエンド (グラフ、QRコード、デバイス・通知管理)
 ├── main.py                      # WatchMe FastAPIアプリケーションサーバー
 ├── requirements.txt             # Python依存関係
 ├── .env                         # 環境変数 (Supabase設定)
@@ -267,6 +294,13 @@ admin/
    - デバイス状態の監視
    - 音声データ数の管理
    - UUID形式IDのクリックコピー機能
+
+8. **通知管理**: ユーザーへの通知作成・送信・管理
+   - **個別通知作成**: ユーザーID・タイプ・タイトル・メッセージを指定して個別送信
+   - **一括通知送信**: 全ユーザーまたは指定したユーザーリストへの一括送信
+   - **通知統計表示**: 総通知数・未読数・既読数・タイプ別集計をリアルタイム表示
+   - **通知履歴管理**: 送信済み通知の一覧表示・詳細確認・削除機能
+   - **WatchMe連携**: 作成した通知がWatchMe v8ダッシュボードに即座に反映
 
 ### 🔐 セキュリティ
 
@@ -622,6 +656,18 @@ NODE_ENV=development
 ---
 
 ## 🔧 最新のアップデート（2025-07-08）
+
+### ✨ 新機能・改善点（2025-07-11）
+- **🆕 通知管理システム完全実装**: 管理画面からユーザーへの通知作成・送信機能を追加
+- **🔔 個別通知作成**: 特定ユーザーへの個別メッセージ送信機能
+- **📢 一括通知送信**: 全ユーザーまたは指定ユーザーへの同時送信機能
+- **📊 通知統計ダッシュボード**: 総通知数・未読数・既読数・タイプ別集計の可視化
+- **📝 通知履歴管理**: 送信済み通知の詳細確認・削除機能
+- **🔗 WatchMe v8連携**: 管理画面で作成した通知がダッシュボードに即座に表示
+- **⚡ リアルタイム統計**: 通知作成と同時に統計情報が自動更新
+- **🎯 通知タイプ管理**: announcement（お知らせ）・event（イベント）・system（システム）の3種類対応
+- **💾 Supabase統合**: notificationsテーブルを使用した確実なデータ管理
+- **🔧 エラーハンドリング強化**: 詳細なエラーメッセージとユーザーフレンドリーな通知
 
 ### ✨ 新機能・改善点（2025-07-08）
 - **🆕 SED Aggregator機能追加**: 行動グラフタブにSED音響イベント集約機能を追加

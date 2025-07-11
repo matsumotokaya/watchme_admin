@@ -51,6 +51,9 @@
                     <button id="devices-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                         🎤 デバイス管理
                     </button>
+                    <button id="notifications-tab" class="tab-button whitespace-nowrap py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                        🔔 通知管理
+                    </button>
                 </nav>
             </div>
 
@@ -450,6 +453,131 @@
                                         <!-- デバイスデータがここに挿入されます -->
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 通知管理タブ -->
+            <div id="notifications-content" class="tab-content hidden">
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <div class="sm:flex sm:items-center">
+                            <div class="sm:flex-auto">
+                                <h2 class="text-lg font-medium text-gray-900">🔔 通知管理</h2>
+                                <p class="mt-2 text-sm text-gray-700">ユーザーへの通知作成・管理・送信</p>
+                            </div>
+                            <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none space-x-2">
+                                <button id="refresh-notifications-btn" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+                                    🔄 更新
+                                </button>
+                                <button id="create-notification-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
+                                    ➕ 通知作成
+                                </button>
+                                <button id="broadcast-notification-btn" class="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700">
+                                    📢 一括送信
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 通知統計 -->
+                        <div class="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+                                                <span class="text-white text-sm font-medium">📊</span>
+                                            </div>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">総通知数</dt>
+                                                <dd id="total-notifications-count" class="text-lg font-medium text-gray-900">-</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
+                                                <span class="text-white text-sm font-medium">🔴</span>
+                                            </div>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">未読通知</dt>
+                                                <dd id="unread-notifications-count" class="text-lg font-medium text-gray-900">-</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                                                <span class="text-white text-sm font-medium">✅</span>
+                                            </div>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">既読通知</dt>
+                                                <dd id="read-notifications-count" class="text-lg font-medium text-gray-900">-</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
+                                                <span class="text-white text-sm font-medium">📢</span>
+                                            </div>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">Announcement</dt>
+                                                <dd id="announcement-notifications-count" class="text-lg font-medium text-gray-900">-</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 通知一覧テーブル -->
+                        <div class="mt-8 flow-root">
+                            <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                                <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                                        <table id="notifications-table" class="min-w-full divide-y divide-gray-300">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">タイプ</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">タイトル・メッセージ</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ユーザーID</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">送信者</th>
+                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">作成日時</th>
+                                                    <th class="relative px-4 py-3"><span class="sr-only">操作</span></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="notifications-table-body" class="bg-white divide-y divide-gray-200">
+                                                <!-- 通知データがここに動的に挿入されます -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

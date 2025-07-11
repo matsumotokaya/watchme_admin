@@ -44,6 +44,11 @@ class SessionStatus(str, Enum):
     COMPLETED = "completed"
     ERROR = "error"
 
+class NotificationType(str, Enum):
+    ANNOUNCEMENT = "announcement"
+    EVENT = "event"
+    SYSTEM = "system"
+
 
 # =============================================================================
 # Users テーブル
@@ -343,4 +348,59 @@ class StatsResponse(BaseModel):
     active_links_count: int
     total_audio_count: int
     total_graph_count: int
+    timestamp: datetime
+
+
+# =============================================================================
+# Notifications テーブル - 通知管理
+# フィールド: id, user_id, type, title, message, is_read, created_at, triggered_by, metadata
+# =============================================================================
+
+class NotificationBase(BaseModel):
+    user_id: str = Field(..., description="通知対象のユーザーID（UUID）")
+    type: NotificationType = Field(..., description="通知タイプ")
+    title: str = Field(..., description="通知のタイトル")
+    message: str = Field(..., description="通知メッセージ")
+    triggered_by: Optional[str] = Field(None, description="通知の送信者・システム名")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="追加のメタデータ（JSONB）")
+
+
+class NotificationCreate(NotificationBase):
+    """通知作成用モデル"""
+    pass
+
+
+class NotificationUpdate(BaseModel):
+    """通知更新用モデル"""
+    is_read: Optional[bool] = None
+    triggered_by: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class Notification(NotificationBase):
+    """通知レスポンスモデル"""
+    id: str = Field(..., description="通知ID（UUID）")
+    is_read: bool = Field(default=False, description="既読フラグ")
+    created_at: datetime = Field(..., description="作成日時")
+
+    class Config:
+        from_attributes = True
+
+
+class NotificationBroadcast(BaseModel):
+    """一括通知送信用モデル"""
+    user_ids: List[str] = Field(..., description="送信対象のユーザーID一覧")
+    type: NotificationType = Field(..., description="通知タイプ")
+    title: str = Field(..., description="通知のタイトル")
+    message: str = Field(..., description="通知メッセージ")
+    triggered_by: Optional[str] = Field(None, description="通知の送信者・システム名")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="追加のメタデータ")
+
+
+class NotificationBroadcastResponse(BaseModel):
+    """一括通知送信結果"""
+    success: bool
+    sent_count: int
+    failed_count: int
+    message: str
     timestamp: datetime

@@ -6,6 +6,7 @@
 // グローバル変数
 let currentUsers = [];
 let currentDevices = [];
+let currentNotifications = [];
 
 // DOM要素の取得
 const tabButtons = document.querySelectorAll('.tab-button');
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     loadAllData();
     loadStats();
+    loadNotifications();
     initializeDefaultUserSession();
     initializeWhisperDate();
     initializePromptDate();
@@ -72,6 +74,9 @@ function switchTab(tabId) {
 function setupEventListeners() {
     document.getElementById('add-user-btn').addEventListener('click', showAddUserModal);
     document.getElementById('add-device-btn').addEventListener('click', showAddDeviceModal);
+    document.getElementById('create-notification-btn').addEventListener('click', showAddNotificationModal);
+    document.getElementById('broadcast-notification-btn').addEventListener('click', showBroadcastNotificationModal);
+    document.getElementById('refresh-notifications-btn').addEventListener('click', loadNotifications);
     
     
     // Whisper機能のイベントリスナー
@@ -1783,6 +1788,456 @@ async function startOpenSMILEAggregator() {
     } finally {
         button.disabled = false;
         button.textContent = '📊 集計処理開始';
+    }
+}
+
+// =============================================================================
+// 通知管理機能
+// =============================================================================
+
+/**
+ * 通知一覧を読み込み
+ */
+async function loadNotifications() {
+    try {
+        const response = await axios.get('/api/notifications');
+        currentNotifications = response.data;
+        renderNotificationsList();
+        updateNotificationStats();
+        console.log('通知一覧を読み込みました:', currentNotifications.length, '件');
+    } catch (error) {
+        console.error('通知一覧の読み込みエラー:', error);
+        showNotification('通知一覧の取得に失敗しました', 'error');
+    }
+}
+
+/**
+ * 通知統計を更新
+ */
+async function updateNotificationStats() {
+    try {
+        const response = await axios.get('/api/notifications/stats');
+        const stats = response.data;
+        
+        // 統計カードを更新
+        const totalElement = document.getElementById('total-notifications-count');
+        const unreadElement = document.getElementById('unread-notifications-count');
+        const readElement = document.getElementById('read-notifications-count');
+        const announcementElement = document.getElementById('announcement-notifications-count');
+        
+        if (totalElement) totalElement.textContent = stats.total_notifications || 0;
+        if (unreadElement) unreadElement.textContent = stats.unread_notifications || 0;
+        if (readElement) readElement.textContent = stats.read_notifications || 0;
+        if (announcementElement) announcementElement.textContent = stats.type_breakdown?.announcement || 0;
+        
+    } catch (error) {
+        console.error('通知統計の取得エラー:', error);
+    }
+}
+
+/**
+ * 通知一覧をレンダリング
+ */
+function renderNotificationsList() {
+    const tableBody = document.getElementById('notifications-table-body');
+    
+    if (currentNotifications.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                    <div class="flex flex-col items-center">
+                        <div class="text-gray-400 text-4xl mb-4">🔔</div>
+                        <p>通知はまだありません</p>
+                        <p class="text-sm text-gray-400 mt-2">通知を作成してユーザーに送信できます</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tableBody.innerHTML = currentNotifications.map(notification => {
+        const isRead = notification.is_read;
+        const createdAt = new Date(notification.created_at).toLocaleString('ja-JP');
+        const typeIcons = {
+            announcement: '📢',
+            event: '📅',
+            system: '⚙️'
+        };
+        
+        return `
+            <tr class="hover:bg-gray-50 ${!isRead ? 'bg-blue-50' : ''}">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div class="flex items-center">
+                        ${typeIcons[notification.type] || '📋'}
+                        <span class="ml-2">${notification.type}</span>
+                        ${!isRead ? '<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">未読</span>' : ''}
+                    </div>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-900">
+                    <div class="font-medium">${notification.title}</div>
+                    <div class="text-gray-500 text-xs mt-1">${notification.message.substring(0, 100)}${notification.message.length > 100 ? '...' : ''}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
+                    ${notification.user_id.substring(0, 8)}...
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${notification.triggered_by || 'admin'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${createdAt}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button onclick="viewNotificationDetails('${notification.id}')" 
+                            class="text-blue-600 hover:text-blue-900 mr-3">詳細</button>
+                    <button onclick="deleteNotification('${notification.id}')" 
+                            class="text-red-600 hover:text-red-900">削除</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * 通知作成モーダルを表示
+ */
+function showAddNotificationModal() {
+    modalContent.innerHTML = `
+        <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900">🔔 新しい通知を作成</h3>
+        </div>
+        <form id="notification-form" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">ユーザーID</label>
+                <input type="text" id="notification-user-id" placeholder="164cba5a-dba6-4cbc-9b39-4eea28d98fa5" 
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" required>
+                <p class="mt-1 text-sm text-gray-500">通知を送信するユーザーのUUID</p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">通知タイプ</label>
+                <select id="notification-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" required>
+                    <option value="announcement">📢 お知らせ</option>
+                    <option value="event">📅 イベント</option>
+                    <option value="system">⚙️ システム</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">タイトル</label>
+                <input type="text" id="notification-title" placeholder="重要なお知らせ" 
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">メッセージ</label>
+                <textarea id="notification-message" rows="4" placeholder="ここに通知メッセージを入力してください..." 
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" required></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">送信者（任意）</label>
+                <input type="text" id="notification-triggered-by" placeholder="admin" 
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+            </div>
+        </form>
+        <div class="flex justify-end mt-6 space-x-3">
+            <button onclick="closeModal()" type="button" 
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                キャンセル
+            </button>
+            <button onclick="createNotification()" type="button" 
+                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
+                通知を作成
+            </button>
+        </div>
+    `;
+    
+    modalOverlay.classList.remove('hidden');
+}
+
+/**
+ * 一括通知送信モーダルを表示
+ */
+function showBroadcastNotificationModal() {
+    modalContent.innerHTML = `
+        <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900">📡 一括通知送信</h3>
+        </div>
+        <form id="broadcast-form" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">送信対象</label>
+                <div class="mt-2 space-y-2">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="broadcast-target" value="all" checked class="form-radio">
+                        <span class="ml-2">全ユーザー</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="broadcast-target" value="custom" class="form-radio">
+                        <span class="ml-2">指定ユーザー</span>
+                    </label>
+                </div>
+            </div>
+            <div id="custom-users-section" class="hidden">
+                <label class="block text-sm font-medium text-gray-700">ユーザーID（カンマ区切り）</label>
+                <textarea id="broadcast-user-ids" rows="3" placeholder="164cba5a-dba6-4cbc-9b39-4eea28d98fa5,..." 
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">通知タイプ</label>
+                <select id="broadcast-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" required>
+                    <option value="announcement">📢 お知らせ</option>
+                    <option value="event">📅 イベント</option>
+                    <option value="system">⚙️ システム</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">タイトル</label>
+                <input type="text" id="broadcast-title" placeholder="重要なお知らせ" 
+                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">メッセージ</label>
+                <textarea id="broadcast-message" rows="4" placeholder="ここに通知メッセージを入力してください..." 
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" required></textarea>
+            </div>
+        </form>
+        <div class="flex justify-end mt-6 space-x-3">
+            <button onclick="closeModal()" type="button" 
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                キャンセル
+            </button>
+            <button onclick="sendBroadcastNotification()" type="button" 
+                    class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700">
+                一括送信
+            </button>
+        </div>
+    `;
+    
+    // ラジオボタンの変更監視
+    document.querySelectorAll('input[name="broadcast-target"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const customSection = document.getElementById('custom-users-section');
+            if (this.value === 'custom') {
+                customSection.classList.remove('hidden');
+            } else {
+                customSection.classList.add('hidden');
+            }
+        });
+    });
+    
+    modalOverlay.classList.remove('hidden');
+}
+
+/**
+ * 通知を作成
+ */
+async function createNotification() {
+    const userId = document.getElementById('notification-user-id').value.trim();
+    const type = document.getElementById('notification-type').value;
+    const title = document.getElementById('notification-title').value.trim();
+    const message = document.getElementById('notification-message').value.trim();
+    const triggeredBy = document.getElementById('notification-triggered-by').value.trim() || 'admin';
+    
+    if (!userId || !type || !title || !message) {
+        showNotification('すべての必須項目を入力してください', 'error');
+        return;
+    }
+    
+    // UUID形式チェック
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(userId)) {
+        showNotification('正しいユーザーIDのフォーマットを入力してください', 'error');
+        return;
+    }
+    
+    try {
+        const notificationData = {
+            user_id: userId,
+            type: type,
+            title: title,
+            message: message,
+            triggered_by: triggeredBy
+        };
+        
+        await axios.post('/api/notifications', notificationData);
+        showNotification('通知を作成しました', 'success');
+        closeModal();
+        loadNotifications();
+    } catch (error) {
+        console.error('通知作成エラー:', error);
+        const errorMessage = error.response?.data?.detail || '通知の作成に失敗しました';
+        showNotification(errorMessage, 'error');
+    }
+}
+
+/**
+ * 一括通知を送信
+ */
+async function sendBroadcastNotification() {
+    const target = document.querySelector('input[name="broadcast-target"]:checked').value;
+    const type = document.getElementById('broadcast-type').value;
+    const title = document.getElementById('broadcast-title').value.trim();
+    const message = document.getElementById('broadcast-message').value.trim();
+    
+    if (!type || !title || !message) {
+        showNotification('すべての必須項目を入力してください', 'error');
+        return;
+    }
+    
+    let userIds = [];
+    
+    if (target === 'all') {
+        // 全ユーザーのIDを取得
+        try {
+            const response = await axios.get('/api/users');
+            userIds = response.data.map(user => user.user_id);
+            
+            if (userIds.length === 0) {
+                showNotification('送信対象のユーザーがいません', 'error');
+                return;
+            }
+        } catch (error) {
+            console.error('ユーザー一覧取得エラー:', error);
+            showNotification('ユーザー一覧の取得に失敗しました', 'error');
+            return;
+        }
+    } else {
+        // カスタムユーザーID
+        const customIds = document.getElementById('broadcast-user-ids').value.trim();
+        if (!customIds) {
+            showNotification('ユーザーIDを入力してください', 'error');
+            return;
+        }
+        userIds = customIds.split(',').map(id => id.trim()).filter(id => id);
+    }
+    
+    if (userIds.length === 0) {
+        showNotification('送信対象のユーザーがいません', 'error');
+        return;
+    }
+    
+    // 確認ダイアログ
+    if (!confirm(`${userIds.length}人のユーザーに一括通知を送信しますか？`)) {
+        return;
+    }
+    
+    try {
+        const broadcastData = {
+            user_ids: userIds,
+            type: type,
+            title: title,
+            message: message,
+            triggered_by: 'admin'
+        };
+        
+        const response = await axios.post('/api/notifications/broadcast', broadcastData);
+        const result = response.data;
+        
+        showNotification(`${result.sent_count}件の通知を送信しました`, 'success');
+        closeModal();
+        loadNotifications();
+    } catch (error) {
+        console.error('一括通知送信エラー:', error);
+        const errorMessage = error.response?.data?.detail || '一括通知の送信に失敗しました';
+        showNotification(errorMessage, 'error');
+    }
+}
+
+/**
+ * 通知詳細を表示
+ */
+function viewNotificationDetails(notificationId) {
+    const notification = currentNotifications.find(n => n.id === notificationId);
+    if (!notification) {
+        showNotification('通知が見つかりません', 'error');
+        return;
+    }
+    
+    const typeIcons = {
+        announcement: '📢',
+        event: '📅',
+        system: '⚙️'
+    };
+    
+    modalContent.innerHTML = `
+        <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900">🔔 通知詳細</h3>
+        </div>
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">通知ID</label>
+                    <div class="mt-1 text-sm text-gray-900 font-mono bg-gray-50 p-2 rounded">${notification.id}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">タイプ</label>
+                    <div class="mt-1 text-sm text-gray-900">${typeIcons[notification.type]} ${notification.type}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">ユーザーID</label>
+                    <div class="mt-1 text-sm text-gray-900 font-mono">${notification.user_id}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">送信者</label>
+                    <div class="mt-1 text-sm text-gray-900">${notification.triggered_by || 'admin'}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">作成日時</label>
+                    <div class="mt-1 text-sm text-gray-900">${new Date(notification.created_at).toLocaleString('ja-JP')}</div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">既読状態</label>
+                    <div class="mt-1 text-sm text-gray-900">
+                        ${notification.is_read ? 
+                            '<span class="text-green-600">✓ 既読</span>' : 
+                            '<span class="text-orange-600">● 未読</span>'
+                        }
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">タイトル</label>
+                <div class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded">${notification.title}</div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">メッセージ</label>
+                <div class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded whitespace-pre-wrap">${notification.message}</div>
+            </div>
+            ${notification.metadata ? `
+            <div>
+                <label class="block text-sm font-medium text-gray-700">メタデータ</label>
+                <div class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                    <pre class="whitespace-pre-wrap">${JSON.stringify(notification.metadata, null, 2)}</pre>
+                </div>
+            </div>
+            ` : ''}
+        </div>
+        <div class="flex justify-end mt-6 space-x-3">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                閉じる
+            </button>
+            <button onclick="deleteNotification('${notification.id}'); closeModal();" class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700">
+                削除
+            </button>
+        </div>
+    `;
+    
+    modalOverlay.classList.remove('hidden');
+}
+
+/**
+ * 通知を削除
+ */
+async function deleteNotification(notificationId) {
+    if (!confirm('この通知を削除しますか？')) {
+        return;
+    }
+    
+    try {
+        await axios.delete(`/api/notifications/${notificationId}`);
+        showNotification('通知を削除しました', 'success');
+        loadNotifications();
+    } catch (error) {
+        console.error('通知削除エラー:', error);
+        const errorMessage = error.response?.data?.detail || '通知の削除に失敗しました';
+        showNotification(errorMessage, 'error');
     }
 }
 

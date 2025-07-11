@@ -21,7 +21,7 @@ class SupabaseClient:
             "Content-Type": "application/json",
         }
 
-    async def select(self, table: str, columns: str = "*", filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def select(self, table: str, columns: str = "*", filters: Optional[Dict[str, Any]] = None, order: Optional[str] = None) -> List[Dict[str, Any]]:
         """データを取得"""
         url = f"{self.rest_url}/{table}"
         params = {"select": columns}
@@ -29,6 +29,9 @@ class SupabaseClient:
         if filters:
             for key, value in filters.items():
                 params[key] = f"eq.{value}"
+        
+        if order:
+            params["order"] = order
         
         async with httpx.AsyncClient() as client:
             response = await client.get(url, headers=self.headers, params=params)
@@ -38,12 +41,19 @@ class SupabaseClient:
     async def insert(self, table: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """データを挿入"""
         url = f"{self.rest_url}/{table}"
+        headers = {**self.headers, "Prefer": "return=representation"}
         
         async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=self.headers, json=data)
+            response = await client.post(url, headers=headers, json=data)
             response.raise_for_status()
             result = response.json()
-            return result[0] if result else {}
+            
+            if isinstance(result, list) and len(result) > 0:
+                return result[0]
+            elif isinstance(result, dict):
+                return result
+            else:
+                raise ValueError(f"Unexpected result format: {result}")
 
     async def update(self, table: str, data: Dict[str, Any], filters: Dict[str, Any]) -> Dict[str, Any]:
         """データを更新"""

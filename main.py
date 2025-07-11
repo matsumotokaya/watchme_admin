@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timedelta
 import json
@@ -30,7 +30,10 @@ from models.schemas import (
     # 新しいユーザーステータス関連
     UserStatus, SubscriptionPlan, PlatformType,
     GuestUserCreate, UserUpgradeToMember, UserStatusUpdate,
-    VirtualMobileDeviceCreate
+    VirtualMobileDeviceCreate,
+    # 通知管理関連
+    NotificationType, Notification, NotificationCreate, NotificationUpdate,
+    NotificationBroadcast, NotificationBroadcastResponse
 )
 
 app = FastAPI(title="WatchMe Admin (Fixed)", description="修正済みWatchMe管理画面API", version="2.0.0")
@@ -592,6 +595,183 @@ async def get_users_by_status(status: UserStatus):
 
 
 # =============================================================================
+# 通知管理API - Supabase notifications テーブル
+# =============================================================================
+
+@app.get("/api/notifications", response_model=List[Notification])
+async def get_all_notifications():
+    """すべての通知を取得（管理画面用）"""
+    try:
+        client = get_supabase_client()
+        notifications_data = await client.select("notifications", order="created_at.desc")
+        return [Notification(**notification) for notification in notifications_data]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"通知一覧の取得に失敗しました: {str(e)}")
+
+
+@app.get("/api/notifications/user/{user_id}", response_model=List[Notification])
+async def get_user_notifications(user_id: str):
+    """特定ユーザーの通知を取得"""
+    try:
+        client = get_supabase_client()
+        notifications_data = await client.select("notifications", 
+                                                filters={"user_id": user_id},
+                                                order="created_at.desc")
+        return [Notification(**notification) for notification in notifications_data]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ユーザー通知の取得に失敗しました: {str(e)}")
+
+
+@app.post("/api/notifications", response_model=Notification)
+async def create_notification(notification: NotificationCreate):
+    """新しい通知を作成"""
+    try:
+        client = get_supabase_client()
+        
+        notification_data = {
+            "user_id": notification.user_id,
+            "type": notification.type.value,
+            "title": notification.title,
+            "message": notification.message,
+            "triggered_by": notification.triggered_by or "admin",
+            "metadata": notification.metadata,
+            "is_read": False
+        }
+        
+        created_notification = await client.insert("notifications", notification_data)
+        
+        if not created_notification:
+            raise HTTPException(status_code=500, detail="通知の作成に失敗しました")
+        
+        return Notification(**created_notification)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"通知作成に失敗しました: {str(e)}")
+
+
+@app.post("/api/notifications/broadcast", response_model=NotificationBroadcastResponse)
+async def broadcast_notification(broadcast: NotificationBroadcast):
+    """一括通知送信"""
+    try:
+        client = get_supabase_client()
+        
+        # 各ユーザーに個別の通知を作成
+        notifications_data = []
+        for user_id in broadcast.user_ids:
+            notification_data = {
+                "user_id": user_id,
+                "type": broadcast.type.value,
+                "title": broadcast.title,
+                "message": broadcast.message,
+                "triggered_by": broadcast.triggered_by or "admin",
+                "metadata": broadcast.metadata,
+                "is_read": False
+            }
+            notifications_data.append(notification_data)
+        
+        # 一つずつ挿入（バッチ挿入の代替）
+        created_notifications = []
+        for notification_data in notifications_data:
+            created_notification = await client.insert("notifications", notification_data)
+            created_notifications.append(created_notification)
+        sent_count = len(created_notifications) if created_notifications else 0
+        failed_count = len(broadcast.user_ids) - sent_count
+        
+        return NotificationBroadcastResponse(
+            success=True,
+            sent_count=sent_count,
+            failed_count=failed_count,
+            message=f"{sent_count}件の通知を送信しました",
+            timestamp=datetime.now()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"一括通知送信に失敗しました: {str(e)}")
+
+
+@app.put("/api/notifications/{notification_id}", response_model=Notification)
+async def update_notification(notification_id: str, update_data: NotificationUpdate):
+    """通知を更新（既読状態など）"""
+    try:
+        client = get_supabase_client()
+        
+        # 更新データの準備
+        update_fields = {}
+        if update_data.is_read is not None:
+            update_fields["is_read"] = update_data.is_read
+        if update_data.triggered_by is not None:
+            update_fields["triggered_by"] = update_data.triggered_by
+        if update_data.metadata is not None:
+            update_fields["metadata"] = update_data.metadata
+        
+        if not update_fields:
+            raise HTTPException(status_code=400, detail="更新するデータがありません")
+        
+        updated_notification = await client.update("notifications", 
+                                                  {"id": notification_id}, 
+                                                  update_fields)
+        if not updated_notification:
+            raise HTTPException(status_code=404, detail="通知が見つかりません")
+        
+        return Notification(**updated_notification[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"通知更新に失敗しました: {str(e)}")
+
+
+@app.delete("/api/notifications/{notification_id}", response_model=ResponseModel)
+async def delete_notification(notification_id: str):
+    """通知を削除"""
+    try:
+        client = get_supabase_client()
+        
+        # 通知の存在確認
+        existing_notification = await client.select("notifications", filters={"id": notification_id})
+        if not existing_notification:
+            raise HTTPException(status_code=404, detail="通知が見つかりません")
+        
+        # 削除実行
+        await client.delete("notifications", {"id": notification_id})
+        
+        return ResponseModel(success=True, message="通知を削除しました")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"通知削除に失敗しました: {str(e)}")
+
+
+@app.get("/api/notifications/stats", response_model=Dict[str, Any])
+async def get_notification_stats():
+    """通知統計情報を取得"""
+    try:
+        client = get_supabase_client()
+        
+        # 全通知数
+        all_notifications = await client.select("notifications")
+        total_count = len(all_notifications)
+        
+        # 未読通知数
+        unread_count = len([n for n in all_notifications if not n.get("is_read", False)])
+        
+        # タイプ別集計
+        type_counts = {}
+        for notification in all_notifications:
+            notification_type = notification.get("type", "unknown")
+            type_counts[notification_type] = type_counts.get(notification_type, 0) + 1
+        
+        return {
+            "total_notifications": total_count,
+            "unread_notifications": unread_count,
+            "read_notifications": total_count - unread_count,
+            "type_breakdown": type_counts,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"通知統計の取得に失敗しました: {str(e)}")
+
+
+# =============================================================================
 # ヘルスチェック
 # =============================================================================
 
@@ -604,4 +784,4 @@ async def health_check():
 if __name__ == "__main__":
     print("🚀 WatchMe Admin Server starting...")
     print("✅ Supabase client will be initialized on first API call")
-    uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=False, log_level="warning")
+    uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=False, log_level="info")
