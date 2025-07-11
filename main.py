@@ -20,17 +20,13 @@ from fastapi import Query
 
 from api.supabase_client import SupabaseClient
 from models.schemas import (
-    User, Device, ViewerLink, ViewerLinkWithDetails,
-    UserCreate, DeviceCreate, ViewerLinkCreate, ResponseModel,
-    AudioData, AudioDataCreate, GraphData, GraphDataCreate,
-    DeviceSession, DeviceSessionCreate, DeviceSessionUpdate,
-    MyDeviceInfo, GraphSummary, DeviceGraphsResponse,
-    QRCodeResponse, DeviceLinkRequest, StatsResponse,
-    DeviceUpdate, DeviceStatus, GraphType, SessionStatus,
+    User, Device, 
+    UserCreate, DeviceCreate, ResponseModel,
+    DeviceUpdate, DeviceStatus, 
     # 新しいユーザーステータス関連
     UserStatus, SubscriptionPlan, PlatformType,
     GuestUserCreate, UserUpgradeToMember, UserStatusUpdate,
-    VirtualMobileDeviceCreate,
+    VirtualMobileDeviceCreate, StatsResponse,
     # 通知管理関連
     NotificationType, Notification, NotificationCreate, NotificationUpdate,
     NotificationBroadcast, NotificationBroadcastResponse
@@ -224,191 +220,8 @@ async def sync_device(device_id: str):
         raise HTTPException(status_code=500, detail=f"デバイス同期に失敗しました: {str(e)}")
 
 
-@app.get("/api/devices/{device_id}/qr", response_model=QRCodeResponse)
-async def generate_device_qr(device_id: str):
-    """デバイスのQRコードを生成"""
-    try:
-        # デバイスの存在確認
-        device = await supabase_client.select("devices", filters={"device_id": device_id})
-        if not device:
-            raise HTTPException(status_code=404, detail="デバイスが見つかりません")
-        
-        # QRコードデータの生成（シンプルなJSON形式）
-        qr_data = {
-            "device_id": device_id,
-            "timestamp": datetime.now().isoformat(),
-            "type": "watchme_device_link"
-        }
-        qr_code_data = base64.b64encode(json.dumps(qr_data).encode()).decode()
-        
-        # QRコード情報をデバイスに保存
-        update_data = {"qr_code": qr_code_data}
-        await supabase_client.update("devices", {"device_id": device_id}, update_data)
-        
-        return QRCodeResponse(
-            device_id=device_id,
-            qr_code_data=qr_code_data,
-            expires_at=datetime.now() + timedelta(hours=24)
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"QRコード生成に失敗しました: {str(e)}")
 
 
-@app.post("/api/devices/{device_id}/audio", response_model=AudioData)
-async def upload_audio_data(device_id: str, audio_data: AudioDataCreate):
-    """音声データをアップロード"""
-    try:
-        # デバイスの存在確認
-        device = await supabase_client.select("devices", filters={"device_id": device_id})
-        if not device:
-            raise HTTPException(status_code=404, detail="デバイスが見つかりません")
-        
-        # 音声データの保存（将来的にはaudio_dataテーブルに保存）
-        audio_record = {
-            "audio_id": str(uuid.uuid4()),
-            "device_id": device_id,
-            "recorded_at": audio_data.recorded_at.isoformat(),
-            "file_path": audio_data.file_path,
-            "file_size": audio_data.file_size,
-            "duration_seconds": audio_data.duration_seconds,
-            "processed": audio_data.processed,
-            "created_at": datetime.now().isoformat()
-        }
-        
-        # デバイスのaudio_countを更新
-        current_count = device[0].get("total_audio_count", 0)
-        await supabase_client.update("devices", {"device_id": device_id}, {
-            "total_audio_count": current_count + 1,
-            "last_sync": datetime.now().isoformat()
-        })
-        
-        # 注意: 実際の音声データテーブルが存在しない場合は、ダミーレスポンスを返す
-        return AudioData(
-            audio_id=audio_record["audio_id"],
-            device_id=device_id,
-            recorded_at=audio_data.recorded_at,
-            file_path=audio_data.file_path,
-            file_size=audio_data.file_size,
-            duration_seconds=audio_data.duration_seconds,
-            processed=audio_data.processed,
-            created_at=datetime.now()
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"音声データのアップロードに失敗しました: {str(e)}")
-
-
-@app.get("/api/devices/{device_id}/audio")
-async def get_device_audio_data(
-    device_id: str,
-    start_time: Optional[datetime] = Query(None, description="開始時刻"),
-    end_time: Optional[datetime] = Query(None, description="終了時刻"),
-    limit: int = Query(100, description="取得件数制限")
-):
-    """デバイスの音声データ一覧を取得"""
-    try:
-        # デバイスの存在確認
-        device = await supabase_client.select("devices", filters={"device_id": device_id})
-        if not device:
-            raise HTTPException(status_code=404, detail="デバイスが見つかりません")
-        
-        # 注意: 実際のaudio_dataテーブルが存在しない場合は、ダミーデータを返す
-        return {
-            "device_id": device_id,
-            "audio_count": device[0].get("total_audio_count", 0),
-            "time_range": {
-                "start": start_time.isoformat() if start_time else None,
-                "end": end_time.isoformat() if end_time else None
-            },
-            "message": "音声データテーブルの実装が必要です"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"音声データ取得に失敗しました: {str(e)}")
-
-
-# =============================================================================
-# グラフ・データ管理API - WatchMe用心理・行動・感情データ
-# =============================================================================
-
-@app.get("/api/devices/{device_id}/graphs", response_model=DeviceGraphsResponse)
-async def get_device_graphs(
-    device_id: str,
-    start_time: Optional[datetime] = Query(None, description="開始時刻"),
-    end_time: Optional[datetime] = Query(None, description="終了時刻"),
-    graph_type: Optional[GraphType] = Query(None, description="グラフタイプ")
-):
-    """デバイスのグラフデータを取得"""
-    try:
-        # デバイスの存在確認
-        device = await supabase_client.select("devices", filters={"device_id": device_id})
-        if not device:
-            raise HTTPException(status_code=404, detail="デバイスが見つかりません")
-        
-        # 注意: 実際のgraph_dataテーブルが存在しない場合は、ダミーレスポンスを返す
-        return DeviceGraphsResponse(
-            device_id=device_id,
-            device_type=device[0]["device_type"],
-            time_range_start=start_time or datetime.now() - timedelta(hours=24),
-            time_range_end=end_time or datetime.now(),
-            graphs=[],
-            summary=[]
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"グラフデータ取得に失敗しました: {str(e)}")
-
-
-@app.post("/api/graphs/generate", response_model=GraphData)
-async def generate_graph(graph_data: GraphDataCreate):
-    """グラフを手動生成"""
-    try:
-        # デバイスの存在確認
-        device = await supabase_client.select("devices", filters={"device_id": graph_data.device_id})
-        if not device:
-            raise HTTPException(status_code=404, detail="デバイスが見つかりません")
-        
-        # 注意: 実際のgraph_dataテーブルが存在しない場合は、ダミーレスポンスを返す
-        return GraphData(
-            graph_id=str(uuid.uuid4()),
-            device_id=graph_data.device_id,
-            audio_id=graph_data.audio_id,
-            graph_type=graph_data.graph_type,
-            time_range_start=graph_data.time_range_start,
-            time_range_end=graph_data.time_range_end,
-            data_json=graph_data.data_json,
-            generated_at=datetime.now()
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"グラフ生成に失敗しました: {str(e)}")
-
-
-@app.get("/api/graphs/{graph_id}", response_model=GraphData)
-async def get_graph(graph_id: str):
-    """特定のグラフデータを取得"""
-    try:
-        # 注意: 実際のgraph_dataテーブルが存在しない場合は、エラーを返す
-        raise HTTPException(
-            status_code=501, 
-            detail="グラフデータテーブルの実装が必要です"
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"グラフデータ取得に失敗しました: {str(e)}")
-
-
-# =============================================================================
-# 閲覧権限・時間制御API - 削除済み（機能廃止）
-# =============================================================================
-# ViewerLink関連機能は削除されました
 
 
 # =============================================================================
@@ -434,10 +247,10 @@ async def get_stats():
             users_count=len(users),
             devices_count=len(devices),
             active_devices_count=active_devices_count,
-            viewer_links_count=0,  # viewer_links機能は削除
-            active_links_count=0,  # viewer_links機能は削除
+            viewer_links_count=0,  # 機能削除済み
+            active_links_count=0,  # 機能削除済み
             total_audio_count=total_audio_count,
-            total_graph_count=total_graph_count,
+            total_graph_count=0,  # 機能削除済み
             timestamp=datetime.now()
         )
     except Exception as e:

@@ -211,9 +211,6 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --log-level warning
 - `GET /api/devices/{device_id}/status` - デバイス状態取得
 - `PUT /api/devices/{device_id}` - デバイス情報更新
 - `PUT /api/devices/{device_id}/sync` - デバイス同期完了通知
-- `GET /api/devices/{device_id}/qr` - QRコード生成
-- `POST /api/devices/{device_id}/audio` - 音声データアップロード
-- `GET /api/devices/{device_id}/audio` - デバイスの音声データ一覧取得
 
 ### 🔔 通知管理 API
 - `GET /api/notifications` - すべての通知を取得（管理画面用）
@@ -656,6 +653,29 @@ NODE_ENV=development
 ---
 
 ## 🔧 最新のアップデート（2025-07-08）
+
+### ✨ 新機能・改善点（2025-07-12）
+- **🧹 不要コードの徹底削除**: 管理画面のコードベースを大幅に簡素化
+- **🗑️ ViewerLink機能完全削除**: ViewerLink関連のAPI・モデル・UI要素を全削除
+- **🗑️ 未実装機能削除**: audio_data・graph_data・QRコード関連の未使用APIを削除
+- **📉 JavaScript大幅削減**: admin.jsから500行以上の不要コードを削除
+- **🔧 依存関係最適化**: Chart.js・QRCode.jsライブラリを削除
+- **⚡ パフォーマンス改善**: 不要なライブラリ読み込みを削除してページ読み込み速度向上
+- **🎯 機能特化**: 必要な機能のみに絞り込み、保守性を大幅向上
+
+**削除した機能・コード:**
+- ViewerLink管理（API・UI・モデル）
+- audio_data・graph_dataテーブル関連API
+- QRコード生成・表示機能
+- グラフ表示・分析機能
+- デバイス拡張API（/qr、/audio等）
+- Chart.js・QRCode.js依存関係
+
+**現在の主要機能:**
+- ✅ ユーザー管理（登録・確認・ステータス管理）
+- ✅ デバイス管理（基本的な登録・状態監視）
+- ✅ 通知管理（作成・送信・統計・履歴）
+- ✅ Whisper統合（音声文字起こし・プロンプト生成・ChatGPT分析）
 
 ### ✨ 新機能・改善点（2025-07-11）
 - **🆕 通知管理システム完全実装**: 管理画面からユーザーへの通知作成・送信機能を追加
