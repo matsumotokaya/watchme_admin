@@ -72,6 +72,16 @@ async def read_root(request: Request):
     """管理画面のメインページ"""
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/debug", response_class=HTMLResponse)
+async def debug_page(request: Request):
+    """デバッグページ"""
+    return templates.TemplateResponse("debug.html", {"request": request})
+
+@app.get("/simple", response_class=HTMLResponse)
+async def simple_page(request: Request):
+    """シンプルな管理画面（フォールバック）"""
+    return templates.TemplateResponse("index_simple.html", {"request": request})
+
 
 # =============================================================================
 # Auth Users API - 削除済み（権限エラーのため）

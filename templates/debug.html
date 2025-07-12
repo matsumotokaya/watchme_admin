@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WatchMe Admin Debug</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-2xl font-bold mb-4">WatchMe Admin - Debug Mode</h1>
+        
+        <div class="bg-white p-4 rounded shadow mb-4">
+            <h2 class="text-lg font-semibold mb-2">初期化ステータス</h2>
+            <div id="debug-log" class="text-sm font-mono bg-gray-100 p-2 rounded max-h-64 overflow-y-auto"></div>
+        </div>
+        
+        <div class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold mb-2">基本動作テスト</h2>
+            <button id="test-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                クリックテスト
+            </button>
+            <div id="test-result" class="mt-2 text-sm"></div>
+        </div>
+    </div>
+
+    <script>
+        // デバッグログ関数
+        function debugLog(message) {
+            const logDiv = document.getElementById('debug-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        // 基本動作テスト
+        document.getElementById('test-btn').addEventListener('click', function() {
+            document.getElementById('test-result').textContent = 'ボタンクリック成功！';
+            debugLog('基本ボタンクリック動作確認');
+        });
+
+        debugLog('Debug page loaded successfully');
+        debugLog('Testing Core.js loading...');
+    </script>
+    
+    <!-- Core.jsのみを読み込んでテスト -->
+    <script>
+        debugLog('Loading core.js...');
+    </script>
+    <script src="/static/core.js"></script>
+    <script>
+        // Core.js読み込み後のチェック
+        setTimeout(() => {
+            if (window.WatchMeAdmin) {
+                debugLog('✅ window.WatchMeAdmin found');
+                debugLog(`Initialized: ${window.WatchMeAdmin.initialized}`);
+                
+                if (window.WatchMeAdmin.initialized) {
+                    debugLog('✅ Core initialization completed');
+                } else {
+                    debugLog('❌ Core not initialized yet');
+                    
+                    // 初期化を待つ
+                    let attempts = 0;
+                    const checkInit = () => {
+                        attempts++;
+                        debugLog(`Checking initialization attempt ${attempts}`);
+                        
+                        if (window.WatchMeAdmin.initialized) {
+                            debugLog('✅ Core initialization completed after waiting');
+                        } else if (attempts < 20) {
+                            setTimeout(checkInit, 100);
+                        } else {
+                            debugLog('❌ Core initialization timeout after 20 attempts');
+                        }
+                    };
+                    checkInit();
+                }
+            } else {
+                debugLog('❌ window.WatchMeAdmin not found');
+            }
+        }, 500);
+    </script>
+</body>
+</html>

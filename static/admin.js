@@ -1,51 +1,81 @@
 /**
- * WatchMe Admin - メインアプリケーション
- * コンポーネント統合と全体初期化を担当（軽量化済み）
+ * WatchMe Admin - メインエントリーポイント (ES Modules版)
+ * すべてのモジュールを統合し、アプリケーションを初期化
  */
+
+import { initializeCore, loadStats } from './core.js';
+import { initializeUserManagement } from './userManagement.js';
 
 // =============================================================================
 // メイン初期化処理
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('WatchMe 音声データ心理分析システム - メイン初期化開始');
+    console.log('WatchMe Admin - ESモジュール版初期化開始');
     
-    // コアモジュールが初期化されるのを待つ
-    if (window.WatchMeAdmin && window.WatchMeAdmin.initialized) {
-        initializeMainApplication();
-    } else {
-        // 短い間隔で初期化状態をチェック
-        const initInterval = setInterval(() => {
-            if (window.WatchMeAdmin && window.WatchMeAdmin.initialized) {
-                clearInterval(initInterval);
-                initializeMainApplication();
-            }
-        }, 50);
+    try {
+        // 1. コアシステムの初期化
+        initializeCore();
         
-        // 5秒でタイムアウト
-        setTimeout(() => {
-            clearInterval(initInterval);
-            console.warn('コアモジュールの初期化がタイムアウトしました');
-        }, 5000);
+        // 2. 統計情報の読み込み
+        loadStats();
+        
+        // 3. ユーザー管理モジュールの初期化
+        initializeUserManagement();
+        
+        // 4. 他のモジュールの初期化（現在は簡素化）
+        initializeBasicModules();
+        
+        console.log('WatchMe Admin - 初期化完了');
+        
+    } catch (error) {
+        console.error('初期化エラー:', error);
+        // エラーが発生した場合も基本機能は動作させる
+        document.getElementById('notification-area').innerHTML = `
+            <div class="border-l-4 p-4 mb-4 bg-red-100 border-red-400 text-red-700">
+                初期化中にエラーが発生しましたが、基本機能は利用できます。
+            </div>
+        `;
     }
 });
 
-function initializeMainApplication() {
-    console.log('メインアプリケーション初期化開始');
+// =============================================================================
+// 基本モジュールの簡易初期化
+// =============================================================================
+
+function initializeBasicModules() {
+    console.log('基本モジュール初期化開始');
     
-    // 統計情報とデータの初期読み込み
-    loadStats();
+    // デバイス管理の基本機能
+    const addDeviceBtn = document.getElementById('add-device-btn');
+    if (addDeviceBtn) {
+        addDeviceBtn.addEventListener('click', function() {
+            alert('デバイス追加機能は開発中です');
+        });
+    }
     
-    // 各管理モジュールのデータを並行読み込み
-    Promise.all([
-        // ユーザー管理とデバイス管理は各モジュールで初期化される
-        // 通知管理も各モジュールで初期化される
-    ]).then(() => {
-        console.log('全モジュールのデータ読み込み完了');
-    }).catch(error => {
-        console.error('データ読み込みエラー:', error);
-        showNotification('データの読み込み中にエラーが発生しました', 'error');
-    });
+    // 通知管理の基本機能
+    const createNotificationBtn = document.getElementById('create-notification-btn');
+    if (createNotificationBtn) {
+        createNotificationBtn.addEventListener('click', function() {
+            alert('通知作成機能は開発中です');
+        });
+    }
     
-    console.log('WatchMe Admin - 初期化完了');
+    const broadcastNotificationBtn = document.getElementById('broadcast-notification-btn');
+    if (broadcastNotificationBtn) {
+        broadcastNotificationBtn.addEventListener('click', function() {
+            alert('一括通知機能は開発中です');
+        });
+    }
+    
+    // 心理分析の基本機能
+    const startWhisperBtn = document.getElementById('start-whisper-btn');
+    if (startWhisperBtn) {
+        startWhisperBtn.addEventListener('click', function() {
+            alert('Whisper処理機能は開発中です');
+        });
+    }
+    
+    console.log('基本モジュール初期化完了');
 }

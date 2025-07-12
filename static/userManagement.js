@@ -1,20 +1,21 @@
 /**
- * WatchMe Admin - ユーザー管理モジュール
+ * WatchMe Admin - ユーザー管理モジュール (ES Modules版)
  * ユーザーの一覧表示、作成、編集機能を提供
  */
+
+import { state, showNotification, showModal, closeModal, renderPagination, formatDate, copyToClipboard } from './core.js';
 
 // =============================================================================
 // ユーザー管理メイン機能
 // =============================================================================
 
 async function loadUsers(page = 1) {
-    const admin = window.WatchMeAdmin;
     try {
-        const response = await axios.get(`/api/users?page=${page}&per_page=${admin.userPagination.per_page}`);
+        const response = await axios.get(`/api/users?page=${page}&per_page=${state.userPagination.per_page}`);
         const data = response.data;
         
-        admin.currentUsers = data.items;
-        admin.userPagination = {
+        state.currentUsers = data.items;
+        state.userPagination = {
             page: data.page,
             per_page: data.per_page,
             total: data.total,
@@ -25,7 +26,7 @@ async function loadUsers(page = 1) {
         
         renderUsersTable();
         renderUsersPagination();
-        console.log(`ユーザー ${admin.currentUsers.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
+        console.log(`ユーザー ${state.currentUsers.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
     } catch (error) {
         console.error('ユーザー読み込みエラー:', error);
         showNotification('ユーザーの読み込みに失敗しました', 'error');
@@ -33,18 +34,17 @@ async function loadUsers(page = 1) {
 }
 
 function renderUsersTable() {
-    const admin = window.WatchMeAdmin;
     const tbody = document.getElementById('users-table-body');
     if (!tbody) return;
     
     tbody.innerHTML = '';
     
-    if (admin.currentUsers.length === 0) {
+    if (state.currentUsers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-4 text-center text-gray-500">ユーザーがありません</td></tr>';
         return;
     }
     
-    admin.currentUsers.forEach(user => {
+    state.currentUsers.forEach(user => {
         const row = document.createElement('tr');
         
         // ステータス表示のスタイリング
@@ -94,9 +94,11 @@ function renderUsersTable() {
 }
 
 function renderUsersPagination() {
-    const admin = window.WatchMeAdmin;
-    renderPagination('users-pagination', admin.userPagination, 'loadUsers');
+    renderPagination('users-pagination', state.userPagination, 'loadUsers');
 }
+
+// ページネーション関数をグローバルに公開（HTML onclick用）
+window.loadUsers = loadUsers;
 
 // =============================================================================
 // ユーザー作成・編集・削除
@@ -140,7 +142,7 @@ function showAddUserModal() {
             showNotification('ユーザーを追加しました', 'success');
             closeModal();
             loadUsers(); // ページをリロード
-            loadStats(); // 統計を更新
+            // loadStats(); // 統計を更新 - coreモジュールから呼び出すように後で修正
         } catch (error) {
             console.error('ユーザー追加エラー:', error);
             showNotification('ユーザーの追加に失敗しました: ' + (error.response?.data?.detail || error.message), 'error');
@@ -149,8 +151,7 @@ function showAddUserModal() {
 }
 
 async function editUser(userId) {
-    const admin = window.WatchMeAdmin;
-    const user = admin.currentUsers.find(u => u.user_id === userId);
+    const user = state.currentUsers.find(u => u.user_id === userId);
     if (!user) {
         showNotification('ユーザーが見つかりません', 'error');
         return;
@@ -218,12 +219,16 @@ async function deleteUser(userId) {
         await axios.delete(`/api/users/${userId}`);
         showNotification('ユーザーを削除しました', 'success');
         loadUsers(); // ページをリロード
-        loadStats(); // 統計を更新
+        // loadStats(); // 統計を更新 - coreモジュールから呼び出すように後で修正
     } catch (error) {
         console.error('ユーザー削除エラー:', error);
         showNotification('ユーザーの削除に失敗しました: ' + (error.response?.data?.detail || error.message), 'error');
     }
 }
+
+// ユーザー操作関数をグローバルに公開（HTML onclick用）
+window.editUser = editUser;
+window.deleteUser = deleteUser;
 
 // =============================================================================
 // ユーティリティ関数
@@ -257,29 +262,20 @@ function getPlanLabel(plan) {
 }
 
 // =============================================================================
-// 初期化とイベントリスナー
+// 初期化とイベントリスナー（exportする）
 // =============================================================================
 
-function initializeUserManagement() {
+export function initializeUserManagement() {
+    console.log('ユーザー管理モジュール初期化開始');
+    
     // ユーザー管理ボタンのイベントリスナー設定
     const addUserBtn = document.getElementById('add-user-btn');
     if (addUserBtn) {
         addUserBtn.addEventListener('click', showAddUserModal);
     }
     
+    // 初回データ読み込み
+    loadUsers();
+    
     console.log('ユーザー管理モジュール初期化完了');
 }
-
-// DOMContentLoaded時の初期化
-document.addEventListener('DOMContentLoaded', function() {
-    // コアモジュールの初期化を待つ
-    const waitForCore = () => {
-        if (window.WatchMeAdmin && window.WatchMeAdmin.initialized) {
-            initializeUserManagement();
-            loadUsers(); // 初回データ読み込み
-        } else {
-            setTimeout(waitForCore, 50);
-        }
-    };
-    waitForCore();
-});

@@ -607,25 +607,7 @@
         </div>
     </div>
 
-    <!-- コンポーネントベースのJavaScript読み込み -->
-    <!-- 必ずこの順序で読み込む：core → 各管理モジュール → メイン -->
-    <!-- ブラウザキャッシュを回避するためにタイムスタンプを追加 -->
-    <script>
-        const cacheBuster = Date.now();
-        const scripts = [
-            '/static/core.js',
-            '/static/userManagement.js',
-            '/static/deviceManagement.js',
-            '/static/notificationManagement.js',
-            '/static/psychologyAnalysis.js',
-            '/static/admin.js'
-        ];
-        
-        scripts.forEach(src => {
-            const script = document.createElement('script');
-            script.src = src + '?v=' + cacheBuster;
-            document.head.appendChild(script);
-        });
-    </script>
+    <!-- ES Modules対応 -->
+    <script type="module" src="/static/admin.js"></script>
 </body>
 </html>

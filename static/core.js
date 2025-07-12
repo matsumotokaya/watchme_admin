@@ -1,10 +1,10 @@
 /**
- * WatchMe Admin Core - 共通機能
+ * WatchMe Admin Core - 共通機能 (ES Modules版)
  * すべてのモジュールで使用される基本機能を提供
  */
 
-// グローバル状態管理
-window.WatchMeAdmin = {
+// 状態管理オブジェクト
+export const state = {
     // データ
     currentUsers: [],
     currentDevices: [],
@@ -22,24 +22,11 @@ window.WatchMeAdmin = {
     initialized: false
 };
 
-// DOM要素の初期化
-function initializeElements() {
-    const admin = window.WatchMeAdmin;
-    admin.elements = {
-        tabButtons: document.querySelectorAll('.tab-button'),
-        tabContents: document.querySelectorAll('.tab-content'),
-        modalOverlay: document.getElementById('modal-overlay'),
-        modalContent: document.getElementById('modal-content'),
-        notificationArea: document.getElementById('notification-area'),
-        statsDisplay: document.getElementById('stats-display')
-    };
-}
-
 // =============================================================================
 // 通知システム
 // =============================================================================
 
-function showNotification(message, type = 'info', duration = 5000) {
+export function showNotification(message, type = 'info', duration = 5000) {
     const notificationArea = document.getElementById('notification-area');
     if (!notificationArea) return;
     
@@ -71,10 +58,9 @@ function showNotification(message, type = 'info', duration = 5000) {
 // モーダル管理
 // =============================================================================
 
-function showModal(title, content) {
-    const admin = window.WatchMeAdmin;
-    const modalOverlay = admin.elements.modalOverlay;
-    const modalContent = admin.elements.modalContent;
+export function showModal(title, content) {
+    const modalOverlay = state.elements.modalOverlay;
+    const modalContent = state.elements.modalContent;
     
     if (!modalOverlay || !modalContent) return;
     
@@ -100,21 +86,22 @@ function showModal(title, content) {
     modalOverlay.classList.remove('hidden');
 }
 
-function closeModal() {
-    const admin = window.WatchMeAdmin;
-    const modalOverlay = admin.elements.modalOverlay;
+export function closeModal() {
+    const modalOverlay = state.elements.modalOverlay;
     if (modalOverlay) {
         modalOverlay.classList.add('hidden');
     }
 }
 
+// グローバルからもアクセス可能にする（HTML onclick用）
+window.closeModal = closeModal;
+
 // =============================================================================
 // タブ機能
 // =============================================================================
 
-function setupTabs() {
-    const admin = window.WatchMeAdmin;
-    admin.elements.tabButtons.forEach(button => {
+export function setupTabs() {
+    state.elements.tabButtons.forEach(button => {
         button.addEventListener('click', function() {
             const tabId = this.id.replace('-tab', '');
             switchTab(tabId);
@@ -122,11 +109,9 @@ function setupTabs() {
     });
 }
 
-function switchTab(tabId) {
-    const admin = window.WatchMeAdmin;
-    
+export function switchTab(tabId) {
     // タブボタンのアクティブ状態を更新
-    admin.elements.tabButtons.forEach(btn => {
+    state.elements.tabButtons.forEach(btn => {
         btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
         btn.classList.add('border-transparent', 'text-gray-500');
     });
@@ -138,7 +123,7 @@ function switchTab(tabId) {
     }
 
     // タブコンテンツの表示を切り替え
-    admin.elements.tabContents.forEach(content => {
+    state.elements.tabContents.forEach(content => {
         content.classList.add('hidden');
     });
     
@@ -154,7 +139,7 @@ function switchTab(tabId) {
 // ページネーション共通機能
 // =============================================================================
 
-function renderPagination(containerId, pagination, loadFunction) {
+export function renderPagination(containerId, pagination, loadFunction) {
     const container = document.getElementById(containerId);
     if (!container) return;
     
@@ -204,13 +189,13 @@ function renderPagination(containerId, pagination, loadFunction) {
 // ユーティリティ関数
 // =============================================================================
 
-function formatDate(dateString) {
+export function formatDate(dateString) {
     if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleString('ja-JP');
 }
 
-function copyToClipboard(text) {
+export function copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
         showNotification('クリップボードにコピーしました', 'success', 2000);
     }).catch(err => {
@@ -219,11 +204,14 @@ function copyToClipboard(text) {
     });
 }
 
+// グローバルからもアクセス可能にする（HTML onclick用）
+window.copyToClipboard = copyToClipboard;
+
 // =============================================================================
 // 統計情報読み込み
 // =============================================================================
 
-async function loadStats() {
+export async function loadStats() {
     try {
         const response = await axios.get('/api/stats');
         const stats = response.data;
@@ -244,15 +232,25 @@ async function loadStats() {
 // 初期化
 // =============================================================================
 
-function initializeCore() {
-    if (window.WatchMeAdmin.initialized) return;
+export function initializeCore() {
+    if (state.initialized) return;
     
     console.log('WatchMe Admin Core - 初期化開始');
-    initializeElements();
+    
+    // DOM要素の初期化
+    state.elements = {
+        tabButtons: document.querySelectorAll('.tab-button'),
+        tabContents: document.querySelectorAll('.tab-content'),
+        modalOverlay: document.getElementById('modal-overlay'),
+        modalContent: document.getElementById('modal-content'),
+        notificationArea: document.getElementById('notification-area'),
+        statsDisplay: document.getElementById('stats-display')
+    };
+    
     setupTabs();
     
     // モーダルクローズイベント
-    const modalOverlay = window.WatchMeAdmin.elements.modalOverlay;
+    const modalOverlay = state.elements.modalOverlay;
     if (modalOverlay) {
         modalOverlay.addEventListener('click', function(e) {
             if (e.target === modalOverlay) {
@@ -261,9 +259,6 @@ function initializeCore() {
         });
     }
     
-    window.WatchMeAdmin.initialized = true;
+    state.initialized = true;
     console.log('WatchMe Admin Core - 初期化完了');
 }
-
-// DOMContentLoaded時の自動初期化
-document.addEventListener('DOMContentLoaded', initializeCore);
