@@ -1,22 +1,23 @@
 /**
- * WatchMe Admin - デバイス管理モジュール
+ * WatchMe Admin - デバイス管理モジュール (ES Modules版)
  * デバイスの一覧表示、作成、編集、ステータス管理機能を提供
  */
+
+import { state, showNotification, showModal, closeModal, renderPagination, formatDate, copyToClipboard } from './core.js';
 
 // =============================================================================
 // デバイス管理メイン機能
 // =============================================================================
 
 async function loadDevices(page = 1) {
-    const admin = window.WatchMeAdmin;
     try {
         console.log('デバイスAPI呼び出し開始');
-        const response = await axios.get(`/api/devices?page=${page}&per_page=${admin.devicePagination.per_page}`);
+        const response = await axios.get(`/api/devices?page=${page}&per_page=${state.devicePagination.per_page}`);
         const data = response.data;
         console.log('デバイスAPIレスポンス:', data);
         
-        admin.currentDevices = data.items;
-        admin.devicePagination = {
+        state.currentDevices = data.items;
+        state.devicePagination = {
             page: data.page,
             per_page: data.per_page,
             total: data.total,
@@ -27,7 +28,7 @@ async function loadDevices(page = 1) {
         
         renderDevicesTable();
         renderDevicesPagination();
-        console.log(`デバイス ${admin.currentDevices.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
+        console.log(`デバイス ${state.currentDevices.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
     } catch (error) {
         console.error('デバイス読み込みエラー詳細:', error);
         console.error('エラーレスポンス:', error.response?.data);
@@ -37,18 +38,17 @@ async function loadDevices(page = 1) {
 }
 
 function renderDevicesTable() {
-    const admin = window.WatchMeAdmin;
     const tbody = document.getElementById('devices-table-body');
     if (!tbody) return;
     
     tbody.innerHTML = '';
     
-    if (admin.currentDevices.length === 0) {
+    if (state.currentDevices.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-4 text-center text-gray-500">デバイスがありません</td></tr>';
         return;
     }
     
-    admin.currentDevices.forEach(device => {
+    state.currentDevices.forEach(device => {
         // デバイス状態の取得
         const status = device.status || 'active';
         const statusColors = {
@@ -111,8 +111,7 @@ function renderDevicesTable() {
 }
 
 function renderDevicesPagination() {
-    const admin = window.WatchMeAdmin;
-    renderPagination('devices-pagination', admin.devicePagination, 'loadDevices');
+    renderPagination('devices-pagination', state.devicePagination, 'loadDevices');
 }
 
 // =============================================================================
@@ -176,8 +175,7 @@ function showAddDeviceModal() {
 }
 
 async function editDevice(deviceId) {
-    const admin = window.WatchMeAdmin;
-    const device = admin.currentDevices.find(d => d.device_id === deviceId);
+    const device = state.currentDevices.find(d => d.device_id === deviceId);
     if (!device) {
         showNotification('デバイスが見つかりません', 'error');
         return;
@@ -283,30 +281,29 @@ function getStatusLabel(status) {
     }
 }
 
+// ページネーション関数をグローバルに公開（HTML onclick用）
+window.loadDevices = loadDevices;
+
+// デバイス操作関数をグローバルに公開（HTML onclick用）
+window.editDevice = editDevice;
+window.syncDevice = syncDevice;
+window.deleteDevice = deleteDevice;
+
 // =============================================================================
-// 初期化とイベントリスナー
+// 初期化とイベントリスナー（exportする）
 // =============================================================================
 
-function initializeDeviceManagement() {
+export function initializeDeviceManagement() {
+    console.log('デバイス管理モジュール初期化開始');
+    
     // デバイス管理ボタンのイベントリスナー設定
     const addDeviceBtn = document.getElementById('add-device-btn');
     if (addDeviceBtn) {
         addDeviceBtn.addEventListener('click', showAddDeviceModal);
     }
     
+    // 初回データ読み込み
+    loadDevices();
+    
     console.log('デバイス管理モジュール初期化完了');
 }
-
-// DOMContentLoaded時の初期化
-document.addEventListener('DOMContentLoaded', function() {
-    // コアモジュールの初期化を待つ
-    const waitForCore = () => {
-        if (window.WatchMeAdmin && window.WatchMeAdmin.initialized) {
-            initializeDeviceManagement();
-            loadDevices(); // 初回データ読み込み
-        } else {
-            setTimeout(waitForCore, 50);
-        }
-    };
-    waitForCore();
-});

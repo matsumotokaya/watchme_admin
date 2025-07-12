@@ -1,20 +1,21 @@
 /**
- * WatchMe Admin - 通知管理モジュール
+ * WatchMe Admin - 通知管理モジュール (ES Modules版)
  * 通知の一覧表示、作成、一括送信、統計表示機能を提供
  */
+
+import { state, showNotification, showModal, closeModal, renderPagination, formatDate, copyToClipboard } from './core.js';
 
 // =============================================================================
 // 通知管理メイン機能
 // =============================================================================
 
 async function loadNotifications(page = 1) {
-    const admin = window.WatchMeAdmin;
     try {
-        const response = await axios.get(`/api/notifications?page=${page}&per_page=${admin.notificationPagination.per_page}`);
+        const response = await axios.get(`/api/notifications?page=${page}&per_page=${state.notificationPagination.per_page}`);
         const data = response.data;
         
-        admin.currentNotifications = data.items;
-        admin.notificationPagination = {
+        state.currentNotifications = data.items;
+        state.notificationPagination = {
             page: data.page,
             per_page: data.per_page,
             total: data.total,
@@ -23,71 +24,69 @@ async function loadNotifications(page = 1) {
             has_prev: data.has_prev
         };
         
-        renderNotificationsList();
+        renderNotificationsTable();
         renderNotificationsPagination();
         updateNotificationStats();
-        console.log(`通知一覧 ${admin.currentNotifications.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
+        console.log(`通知一覧 ${state.currentNotifications.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
     } catch (error) {
         console.error('通知一覧の読み込みエラー:', error);
         showNotification('通知一覧の取得に失敗しました', 'error');
     }
 }
 
-function renderNotificationsList() {
-    const admin = window.WatchMeAdmin;
-    const container = document.getElementById('notifications-list');
-    if (!container) return;
+function renderNotificationsTable() {
+    const tbody = document.getElementById('notifications-table-body');
+    if (!tbody) return;
     
-    if (admin.currentNotifications.length === 0) {
-        container.innerHTML = '<div class="text-center py-12 text-gray-500">通知がありません</div>';
+    tbody.innerHTML = '';
+    
+    if (state.currentNotifications.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-4 text-center text-gray-500">通知がありません</td></tr>';
         return;
     }
     
-    const html = admin.currentNotifications.map(notification => {
-        const typeEmoji = getNotificationTypeEmoji(notification.type);
-        const isRead = notification.is_read;
-        const readBadge = isRead ? 
-            '<span class="text-xs text-green-600">✓ 既読</span>' : 
-            '<span class="text-xs text-orange-600">● 未読</span>';
+    state.currentNotifications.forEach(notification => {
+        const row = document.createElement('tr');
         
-        return `
-            <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex items-center space-x-2">
-                        <span class="text-lg">${typeEmoji}</span>
-                        <h4 class="font-medium text-gray-900">${notification.title}</h4>
-                        ${readBadge}
-                    </div>
-                    <div class="flex space-x-2">
-                        <button onclick="markAsRead('${notification.id}', ${!isRead})" 
-                                class="text-sm px-2 py-1 ${isRead ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-green-100 text-green-700 hover:bg-green-200'} rounded">
-                            ${isRead ? '未読にする' : '既読にする'}
-                        </button>
-                        <button onclick="deleteNotification('${notification.id}')" 
-                                class="text-sm px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded">
-                            削除
-                        </button>
-                    </div>
+        // タイプ表示のスタイリング
+        const typeColor = getTypeColor(notification.type);
+        const typeBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}">${getTypeLabel(notification.type)}</span>`;
+        
+        // 既読状態表示
+        const readStatus = notification.is_read ? 
+            '<span class="text-green-600">✓ 既読</span>' : 
+            '<span class="text-blue-600 font-medium">未読</span>';
+        
+        row.innerHTML = `
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${typeBadge}</td>
+            <td class="px-4 py-4 text-sm font-medium text-gray-900 max-w-xs">
+                <div class="truncate" title="${notification.title}">
+                    ${notification.title}
                 </div>
-                <p class="text-gray-700 mb-3">${notification.message}</p>
-                <div class="flex justify-between items-center text-sm text-gray-500">
-                    <div class="space-x-4">
-                        <span>送信先: <span class="font-mono text-xs">${notification.user_id.substring(0, 8)}...</span></span>
-                        <span>送信者: ${notification.triggered_by || 'admin'}</span>
-                        <span>タイプ: ${getNotificationTypeLabel(notification.type)}</span>
-                    </div>
-                    <span>${formatDate(notification.created_at)}</span>
+            </td>
+            <td class="px-4 py-4 text-sm text-gray-900 max-w-sm">
+                <div class="truncate" title="${notification.message}">
+                    ${notification.message}
                 </div>
-            </div>
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                ${notification.triggered_by || '<span class="text-gray-400">-</span>'}
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm">${readStatus}</td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                ${formatDate(notification.created_at)}
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button onclick="deleteNotification('${notification.id}')" class="text-red-600 hover:text-red-900">削除</button>
+            </td>
         `;
-    }).join('');
-    
-    container.innerHTML = html;
+        
+        tbody.appendChild(row);
+    });
 }
 
 function renderNotificationsPagination() {
-    const admin = window.WatchMeAdmin;
-    renderPagination('notifications-pagination', admin.notificationPagination, 'loadNotifications');
+    renderPagination('notifications-pagination', state.notificationPagination, 'loadNotifications');
 }
 
 // =============================================================================
@@ -247,7 +246,6 @@ function showBroadcastNotificationModal() {
 }
 
 async function sendBroadcastNotification() {
-    const admin = window.WatchMeAdmin;
     const target = document.querySelector('input[name="broadcast-target"]:checked').value;
     let userIds = [];
     
@@ -363,31 +361,56 @@ async function updateNotificationStats() {
 // ユーティリティ関数
 // =============================================================================
 
+function getTypeColor(type) {
+    switch (type) {
+        case 'announcement': return 'bg-blue-100 text-blue-800';
+        case 'system': return 'bg-gray-100 text-gray-800';
+        case 'event': return 'bg-green-100 text-green-800';
+        case 'alert': return 'bg-red-100 text-red-800';
+        default: return 'bg-gray-100 text-gray-800';
+    }
+}
+
+function getTypeLabel(type) {
+    switch (type) {
+        case 'announcement': return 'お知らせ';
+        case 'system': return 'システム';
+        case 'event': return 'イベント';
+        case 'alert': return '警告';
+        default: return type || '不明';
+    }
+}
+
 function getNotificationTypeEmoji(type) {
     switch (type) {
+        case 'announcement': return '📢';
         case 'system': return '⚙️';
+        case 'event': return '🎉';
         case 'alert': return '🚨';
-        case 'promotion': return '🎉';
-        case 'update': return '📦';
         default: return '📄';
     }
 }
 
 function getNotificationTypeLabel(type) {
-    switch (type) {
-        case 'system': return 'システム';
-        case 'alert': return 'アラート';
-        case 'promotion': return 'プロモーション';
-        case 'update': return 'アップデート';
-        default: return type || '不明';
-    }
+    return getTypeLabel(type);
 }
 
+// ページネーション関数をグローバルに公開（HTML onclick用）
+window.loadNotifications = loadNotifications;
+
+// 通知操作関数をグローバルに公開（HTML onclick用）
+window.createNotification = createNotification;
+window.sendBroadcastNotification = sendBroadcastNotification;
+window.markAsRead = markAsRead;
+window.deleteNotification = deleteNotification;
+
 // =============================================================================
-// 初期化とイベントリスナー
+// 初期化とイベントリスナー（exportする）
 // =============================================================================
 
-function initializeNotificationManagement() {
+export function initializeNotificationManagement() {
+    console.log('通知管理モジュール初期化開始');
+    
     // 通知管理ボタンのイベントリスナー設定
     const createNotificationBtn = document.getElementById('create-notification-btn');
     if (createNotificationBtn) {
@@ -404,19 +427,9 @@ function initializeNotificationManagement() {
         refreshNotificationsBtn.addEventListener('click', loadNotifications);
     }
     
+    // 初回データ読み込み
+    loadNotifications();
+    updateNotificationStats();
+    
     console.log('通知管理モジュール初期化完了');
 }
-
-// DOMContentLoaded時の初期化
-document.addEventListener('DOMContentLoaded', function() {
-    // コアモジュールの初期化を待つ
-    const waitForCore = () => {
-        if (window.WatchMeAdmin && window.WatchMeAdmin.initialized) {
-            initializeNotificationManagement();
-            loadNotifications(); // 初回データ読み込み
-        } else {
-            setTimeout(waitForCore, 50);
-        }
-    };
-    waitForCore();
-});

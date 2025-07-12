@@ -5,6 +5,8 @@
 
 import { initializeCore, loadStats } from './core.js';
 import { initializeUserManagement } from './userManagement.js';
+import { initializeNotificationManagement } from './notificationManagement.js';
+import { initializeDeviceManagement } from './deviceManagement.js';
 
 // =============================================================================
 // メイン初期化処理
@@ -23,7 +25,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // 3. ユーザー管理モジュールの初期化
         initializeUserManagement();
         
-        // 4. 他のモジュールの初期化（現在は簡素化）
+        // 4. 通知管理モジュールの初期化
+        initializeNotificationManagement();
+        
+        // 5. デバイス管理モジュールの初期化
+        initializeDeviceManagement();
+        
+        // 6. 他のモジュールの初期化（現在は簡素化）
         initializeBasicModules();
         
         console.log('WatchMe Admin - 初期化完了');
@@ -46,28 +54,9 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeBasicModules() {
     console.log('基本モジュール初期化開始');
     
-    // デバイス管理の基本機能
-    const addDeviceBtn = document.getElementById('add-device-btn');
-    if (addDeviceBtn) {
-        addDeviceBtn.addEventListener('click', function() {
-            alert('デバイス追加機能は開発中です');
-        });
-    }
+    // デバイス管理は専用モジュールで処理済み
     
-    // 通知管理の基本機能
-    const createNotificationBtn = document.getElementById('create-notification-btn');
-    if (createNotificationBtn) {
-        createNotificationBtn.addEventListener('click', function() {
-            alert('通知作成機能は開発中です');
-        });
-    }
-    
-    const broadcastNotificationBtn = document.getElementById('broadcast-notification-btn');
-    if (broadcastNotificationBtn) {
-        broadcastNotificationBtn.addEventListener('click', function() {
-            alert('一括通知機能は開発中です');
-        });
-    }
+    // 通知管理は専用モジュールで処理済み
     
     // 心理分析の基本機能
     const startWhisperBtn = document.getElementById('start-whisper-btn');
