@@ -300,14 +300,13 @@ function initializeDeviceManagement() {
 // DOMContentLoaded時の初期化
 document.addEventListener('DOMContentLoaded', function() {
     // コアモジュールの初期化を待つ
-    if (window.WatchMeAdmin) {
-        initializeDeviceManagement();
-        loadDevices(); // 初回データ読み込み
-    } else {
-        // コアモジュールがまだ読み込まれていない場合は少し待つ
-        setTimeout(() => {
+    const waitForCore = () => {
+        if (window.WatchMeAdmin && window.WatchMeAdmin.initialized) {
             initializeDeviceManagement();
-            loadDevices();
-        }, 100);
-    }
+            loadDevices(); // 初回データ読み込み
+        } else {
+            setTimeout(waitForCore, 50);
+        }
+    };
+    waitForCore();
 });

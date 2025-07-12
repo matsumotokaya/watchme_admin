@@ -410,14 +410,13 @@ function initializeNotificationManagement() {
 // DOMContentLoaded時の初期化
 document.addEventListener('DOMContentLoaded', function() {
     // コアモジュールの初期化を待つ
-    if (window.WatchMeAdmin) {
-        initializeNotificationManagement();
-        loadNotifications(); // 初回データ読み込み
-    } else {
-        // コアモジュールがまだ読み込まれていない場合は少し待つ
-        setTimeout(() => {
+    const waitForCore = () => {
+        if (window.WatchMeAdmin && window.WatchMeAdmin.initialized) {
             initializeNotificationManagement();
-            loadNotifications();
-        }, 100);
-    }
+            loadNotifications(); // 初回データ読み込み
+        } else {
+            setTimeout(waitForCore, 50);
+        }
+    };
+    waitForCore();
 });

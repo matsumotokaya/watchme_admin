@@ -585,12 +585,12 @@ async function startOpenSMILEAggregator() {
 
 document.addEventListener('DOMContentLoaded', function() {
     // コアモジュールの初期化を待つ
-    if (window.WatchMeAdmin) {
-        initializePsychologyAnalysis();
-    } else {
-        // コアモジュールがまだ読み込まれていない場合は少し待つ
-        setTimeout(() => {
+    const waitForCore = () => {
+        if (window.WatchMeAdmin && window.WatchMeAdmin.initialized) {
             initializePsychologyAnalysis();
-        }, 100);
-    }
+        } else {
+            setTimeout(waitForCore, 50);
+        }
+    };
+    waitForCore();
 });
