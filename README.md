@@ -98,6 +98,17 @@ pip3 install -r requirements.txt
 - `created_at` (DateTime)
 - `updated_at` (DateTime, Optional)
 
+### notifications テーブル
+- `id` (String, Primary Key)
+- `user_id` (UUID, Foreign Key to users.user_id)
+- `type` (String) - 'system', 'alert', 'promotion', 'update'
+- `title` (String)
+- `message` (String)
+- `triggered_by` (String) - 送信者（default: 'admin'）
+- `metadata` (JSON, Optional)
+- `is_read` (Boolean, default: false)
+- `created_at` (DateTime)
+
 ### devices テーブル - 音声取得デバイス
 - `device_id` (UUID, Primary Key)
 - `owner_user_id` (UUID, Optional, users.user_id外部キー)
@@ -202,25 +213,45 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9000 --log-level warning
 
 ## 🌐 API エンドポイント
 
-### 📈 ユーザー管理 API
-- `GET /api/users` - 全ユーザーを取得
+### 📈 ユーザー管理 API（ページネーション対応）
+- `GET /api/users?page=1&per_page=20` - ページネーション付きユーザー取得
+- `GET /api/users/all` - 全ユーザーを取得（後方互換性）
 - `POST /api/users` - 新しいユーザーを作成
 
-### 🎤 デバイス管理 API
-- `GET /api/devices` - 全デバイスを取得
+### 🎤 デバイス管理 API（ページネーション対応）
+- `GET /api/devices?page=1&per_page=20` - ページネーション付きデバイス取得
+- `GET /api/devices/all` - 全デバイスを取得（後方互換性）
 - `POST /api/devices` - 新しいデバイスを作成
 - `GET /api/devices/{device_id}/status` - デバイス状態取得
 - `PUT /api/devices/{device_id}` - デバイス情報更新
 - `PUT /api/devices/{device_id}/sync` - デバイス同期完了通知
 
-### 🔔 通知管理 API
-- `GET /api/notifications` - すべての通知を取得（管理画面用）
+### 🔔 通知管理 API（ページネーション対応）
+- `GET /api/notifications?page=1&per_page=20` - ページネーション付き通知取得（管理画面用）
+- `GET /api/notifications/all` - すべての通知を取得（後方互換性）
 - `GET /api/notifications/user/{user_id}` - 特定ユーザーの通知を取得
 - `POST /api/notifications` - 新しい通知を作成
 - `POST /api/notifications/broadcast` - 一括通知送信
 - `PUT /api/notifications/{notification_id}` - 通知を更新（既読状態など）
 - `DELETE /api/notifications/{notification_id}` - 通知を削除
 - `GET /api/notifications/stats` - 通知統計情報を取得
+
+#### ページネーションパラメータ
+- `page`: ページ番号（1から開始、デフォルト: 1）
+- `per_page`: 1ページあたりのアイテム数（1-100、デフォルト: 20）
+
+#### ページネーションレスポンス形式
+```json
+{
+  "items": [...],
+  "total": 100,
+  "page": 1,
+  "per_page": 20,
+  "total_pages": 5,
+  "has_next": true,
+  "has_prev": false
+}
+```
 
 ### 🧠 Whisper統合 API
 - **外部API**: `POST http://localhost:8001/fetch-and-transcribe` - Whisper音声文字起こし処理
@@ -241,7 +272,7 @@ admin/
 ├── templates/
 │   └── index.html               # WatchMe管理画面 (音声心理分析UI)
 ├── static/
-│   └── admin.js                 # WatchMeフロントエンド (グラフ、QRコード、デバイス・通知管理)
+│   └── admin.js                 # WatchMeフロントエンド (ページネーション対応、通知管理)
 ├── main.py                      # WatchMe FastAPIアプリケーションサーバー
 ├── requirements.txt             # Python依存関係
 ├── .env                         # 環境変数 (Supabase設定)
@@ -293,12 +324,13 @@ admin/
    - 音声データ数の管理
    - UUID形式IDのクリックコピー機能
 
-8. **通知管理**: ユーザーへの通知作成・送信・管理
+8. **通知管理（ページネーション対応）**: ユーザーへの通知作成・送信・管理
    - **個別通知作成**: ユーザーID・タイプ・タイトル・メッセージを指定して個別送信
    - **一括通知送信**: 全ユーザーまたは指定したユーザーリストへの一括送信
    - **通知統計表示**: 総通知数・未読数・既読数・タイプ別集計をリアルタイム表示
-   - **通知履歴管理**: 送信済み通知の一覧表示・詳細確認・削除機能
+   - **通知履歴管理**: 送信済み通知のページネーション付き一覧表示・詳細確認・削除機能
    - **WatchMe連携**: 作成した通知がWatchMe v8ダッシュボードに即座に反映
+   - **大量データ対応**: ページネーション機能により数千件の通知も高速表示
 
 ### 🔐 セキュリティ
 
@@ -665,6 +697,7 @@ NODE_ENV=development
 - **🎯 機能特化**: 必要な機能のみに絞り込み、保守性を大幅向上
 - **🚀 起動安定化**: Supabaseクライアントの即時初期化とstart.shの簡素化を実施
 - **📁 環境設定統一**: グローバルPython3環境での実行に統一、仮想環境記述の矛盾を解消
+- **📄 サーバーサイドページネーション**: 全件取得からページネーション方式に変更、パフォーマンス大幅改善
 
 **削除した機能・コード:**
 - ViewerLink管理（API・UI・モデル）
@@ -675,10 +708,17 @@ NODE_ENV=development
 - Chart.js・QRCode.js依存関係
 
 **現在の主要機能:**
-- ✅ ユーザー管理（登録・確認・ステータス管理）
-- ✅ デバイス管理（基本的な登録・状態監視）
-- ✅ 通知管理（作成・送信・統計・履歴）
+- ✅ ユーザー管理（登録・確認・ステータス管理・**ページネーション対応**）
+- ✅ デバイス管理（基本的な登録・状態監視・**ページネーション対応**）
+- ✅ 通知管理（作成・送信・統計・履歴・**ページネーション対応**）
 - ✅ Whisper統合（音声文字起こし・プロンプト生成・ChatGPT分析）
+
+**📄 ページネーション機能の詳細:**
+- **API**: `GET /api/users?page=1&per_page=20` 形式で実装
+- **パフォーマンス**: 大量データでもメモリ効率的で高速表示
+- **UI**: 前へ/次へボタン、ページ番号、件数表示を含む完全なページネーション
+- **後方互換性**: `/api/users/all` エンドポイントで全件取得も可能
+- **スケーラビリティ**: 数万件のデータでも安定動作
 
 ### ✨ 新機能・改善点（2025-07-11）
 - **🆕 通知管理システム完全実装**: 管理画面からユーザーへの通知作成・送信機能を追加
