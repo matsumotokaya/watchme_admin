@@ -158,9 +158,14 @@ async function startPsychologyBatch() {
     logContainer.classList.remove('hidden');
     logElement.innerHTML = '';
 
-    const log = (message, isError = false) => {
+    const log = (message, isError = false, isWarning = false) => {
         const timestamp = new Date().toLocaleTimeString();
-        const colorClass = isError ? 'text-red-400' : 'text-green-400';
+        let colorClass = 'text-green-400';
+        if (isError) {
+            colorClass = 'text-red-400';
+        } else if (isWarning) {
+            colorClass = 'text-yellow-400';
+        }
         logElement.innerHTML += `<div class="flex"><div class="w-20 text-gray-500">${timestamp}</div><div class="flex-1 ${colorClass}">${message}</div></div>`;
         logContainer.scrollTop = logContainer.scrollHeight;
     };
@@ -173,8 +178,39 @@ async function startPsychologyBatch() {
         });
 
         const results = response.data.results;
-        results.forEach(result => {
-            log(`ステップ ${result.step}: ${result.message}`, !result.success);
+        results.forEach((result, index) => {
+            const isError = !result.success;
+            const isWarning = result.step.includes('確認');
+            
+            // より詳細なステップ表示
+            if (result.step === '初期化') {
+                log(`🚀 ${result.message}`, isError);
+            } else if (result.step.includes('サーバー確認')) {
+                log(`${result.message}`, isError, isWarning);
+            } else if (result.step.includes('Whisper')) {
+                log(`🎤 ${result.step}: ${result.message}`, isError);
+                if (result.success && result.data) {
+                    const summary = result.data.summary || {};
+                    log(`   📊 処理結果: 取得${summary.audio_fetched || 0}件, 保存${summary.supabase_saved || 0}件, スキップ${summary.skipped_existing || 0}件`, false);
+                }
+            } else if (result.step.includes('プロンプト')) {
+                log(`📝 ${result.step}: ${result.message}`, isError);
+                if (result.success && result.data) {
+                    log(`   📄 プロンプト生成完了: ${result.data.output_path}`, false);
+                }
+            } else if (result.step.includes('ChatGPT')) {
+                log(`🧠 ${result.step}: ${result.message}`, isError);
+                if (result.success && result.data) {
+                    const data = result.data;
+                    if (data.average_score) {
+                        log(`   📈 分析結果: 平均スコア ${data.average_score}, ポジティブ${data.positive_time_minutes}分`, false);
+                    }
+                }
+            } else if (result.step === '完了') {
+                log(`🎉 ${result.message}`, isError);
+            } else {
+                log(`⚙️ ${result.step}: ${result.message}`, isError);
+            }
         });
 
         if (response.data.success) {

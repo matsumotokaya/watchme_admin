@@ -642,21 +642,48 @@ API_ENDPOINTS = {
     "chatgpt": "http://localhost:8002/analyze-vibegraph-supabase"
 }
 
+async def check_api_health(session, step_name, base_url):
+    """APIサーバーのヘルスチェックを実行"""
+    # URLからベースURLを抽出してヘルスチェックURLを構築
+    from urllib.parse import urlparse
+    parsed = urlparse(base_url)
+    health_url = f"{parsed.scheme}://{parsed.netloc}/health"
+    
+    try:
+        response = await session.get(health_url, timeout=5.0)
+        if response.status_code == 200:
+            return {"step": step_name, "success": True, "message": f"✅ {step_name}サーバー起動確認済み (ポート{parsed.port})"}
+        else:
+            return {"step": step_name, "success": False, "message": f"❌ {step_name}サーバー異常 (Status: {response.status_code})"}
+    except Exception as e:
+        return {"step": step_name, "success": False, "message": f"❌ {step_name}サーバーに接続できません (ポート{parsed.port}): {str(e)}"}
+
 async def call_api(session, step_name, url, method='post', json_data=None, params=None):
     """指定されたAPIを呼び出し、結果を返す"""
     try:
         print(f"🔗 APIコール開始: {step_name} -> {url}")
+        
+        # APIサーバーのヘルスチェック（失敗しても処理は続行）
+        base_url = url
+        health_check = await check_api_health(session, step_name, base_url)
+        
+        print(f"🚀 {step_name}API処理開始...")
         if method == 'post':
             response = await session.post(url, json=json_data, timeout=300.0)
         else:
             response = await session.get(url, params=params, timeout=300.0)
         
         response.raise_for_status() # HTTPエラーがあれば例外を発生
-        return {"step": step_name, "success": True, "message": "成功", "data": response.json()}
+        print(f"✅ {step_name}API処理完了")
+        return {"step": step_name, "success": True, "message": "✅ 処理完了", "data": response.json(), "health_check": health_check}
     except httpx.HTTPStatusError as e:
-        return {"step": step_name, "success": False, "message": f"APIエラー: {e.response.status_code} - {e.response.text}"}
+        error_msg = f"❌ APIエラー: {e.response.status_code} - {e.response.text}"
+        print(f"❌ {step_name}API処理失敗: {error_msg}")
+        return {"step": step_name, "success": False, "message": error_msg}
     except httpx.RequestError as e:
-        return {"step": step_name, "success": False, "message": f"リクエストエラー: {e}"}
+        error_msg = f"❌ 接続エラー: {str(e)}"
+        print(f"❌ {step_name}API接続失敗: {error_msg}")
+        return {"step": step_name, "success": False, "message": error_msg}
 
 @app.post("/api/batch/create-psychology-graph")
 async def create_psychology_graph_batch(request: Request):
@@ -669,27 +696,65 @@ async def create_psychology_graph_batch(request: Request):
         raise HTTPException(status_code=400, detail="device_idとdateは必須です")
 
     results = []
+    
+    # 初期化ログ
+    init_log = {
+        "step": "初期化", 
+        "success": True, 
+        "message": f"🚀 バッチ処理開始 - デバイス: {device_id[:8]}..., 日付: {date}"
+    }
+    results.append(init_log)
+
     async with httpx.AsyncClient() as session:
-        # ステップ1: Whisper
-        whisper_result = await call_api(session, "Whisper", API_ENDPOINTS["whisper"], json_data={"device_id": device_id, "date": date})
+        # ステップ1: Whisperサーバー確認と処理
+        whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data={"device_id": device_id, "date": date})
+        
+        # ヘルスチェック結果があれば追加
+        if "health_check" in whisper_result:
+            health_check = whisper_result["health_check"]
+            health_check["step"] = "Whisperサーバー確認"
+            results.append(health_check)
+        
         results.append(whisper_result)
         if not whisper_result["success"]:
-            return {"success": False, "message": "Whisper処理で失敗しました。", "results": results}
+            return {"success": False, "message": "❌ Whisper処理で失敗しました。", "results": results}
 
-        # ステップ2: プロンプト生成
+        # ステップ2: プロンプト生成サーバー確認と処理
         prompt_params = {"device_id": device_id, "date": date}
         prompt_result = await call_api(session, "プロンプト生成", API_ENDPOINTS["prompt_gen"], method='get', params=prompt_params)
+        
+        # ヘルスチェック結果があれば追加
+        if "health_check" in prompt_result:
+            health_check = prompt_result["health_check"]
+            health_check["step"] = "プロンプト生成サーバー確認"
+            results.append(health_check)
+        
         results.append(prompt_result)
         if not prompt_result["success"]:
-            return {"success": False, "message": "プロンプT生成で失敗しました。", "results": results}
+            return {"success": False, "message": "❌ プロンプト生成で失敗しました。", "results": results}
 
-        # ステップ3: ChatGPT
-        chatgpt_result = await call_api(session, "ChatGPT分析", API_ENDPOINTS["chatgpt"], json_data={"device_id": device_id, "date": date})
+        # ステップ3: ChatGPTサーバー確認と処理
+        chatgpt_result = await call_api(session, "ChatGPT心理分析", API_ENDPOINTS["chatgpt"], json_data={"device_id": device_id, "date": date})
+        
+        # ヘルスチェック結果があれば追加
+        if "health_check" in chatgpt_result:
+            health_check = chatgpt_result["health_check"]
+            health_check["step"] = "ChatGPTサーバー確認"
+            results.append(health_check)
+        
         results.append(chatgpt_result)
         if not chatgpt_result["success"]:
-            return {"success": False, "message": "ChatGPT分析で失敗しました。", "results": results}
+            return {"success": False, "message": "❌ ChatGPT分析で失敗しました。", "results": results}
 
-    return {"success": True, "message": "バッチ処理が正常に完了しました。", "results": results}
+    # 完了ログ
+    completion_log = {
+        "step": "完了", 
+        "success": True, 
+        "message": "🎉 バッチ処理が正常に完了しました。全てのステップが成功しました。"
+    }
+    results.append(completion_log)
+
+    return {"success": True, "message": "✅ バッチ処理が正常に完了しました。", "results": results}
 
 
 # =============================================================================
