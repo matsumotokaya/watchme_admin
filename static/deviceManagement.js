@@ -3,7 +3,7 @@
  * デバイスの一覧表示、作成、編集、ステータス管理機能を提供
  */
 
-import { state, showNotification, showModal, closeModal, renderPagination, formatDate, copyToClipboard } from './core.js';
+import { state, showNotification, showModal, closeModal, formatDate, copyToClipboard } from './core.js';
 
 // =============================================================================
 // デバイス管理メイン機能
@@ -100,9 +100,9 @@ function renderDevicesTable() {
                 ${device.total_audio_count || 0}
             </td>
             <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onclick="editDevice('${device.device_id}')" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
-                <button onclick="syncDevice('${device.device_id}')" class="text-green-600 hover:text-green-900 mr-3">同期</button>
-                <button onclick="deleteDevice('${device.device_id}')" class="text-red-600 hover:text-red-900">削除</button>
+                <button data-action="edit-device" data-device-id="${device.device_id}" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
+                <button data-action="sync-device" data-device-id="${device.device_id}" class="text-green-600 hover:text-green-900 mr-3">同期</button>
+                <button data-action="delete-device" data-device-id="${device.device_id}" class="text-red-600 hover:text-red-900">削除</button>
             </td>
         `;
         
@@ -111,7 +111,49 @@ function renderDevicesTable() {
 }
 
 function renderDevicesPagination() {
-    renderPagination('devices-pagination', state.devicePagination, 'loadDevices');
+    const container = document.getElementById('devices-pagination');
+    if (!container) return;
+    
+    let html = `
+        <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                ${state.devicePagination.total}件中 ${((state.devicePagination.page - 1) * state.devicePagination.per_page) + 1}-${Math.min(state.devicePagination.page * state.devicePagination.per_page, state.devicePagination.total)}件を表示
+            </div>
+            <div class="flex space-x-2">
+    `;
+    
+    // 前へボタン
+    if (state.devicePagination.has_prev) {
+        html += `<button data-action="load-devices" data-page="${state.devicePagination.page - 1}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">前へ</button>`;
+    } else {
+        html += `<button disabled class="px-3 py-1 border border-gray-300 text-gray-400 rounded cursor-not-allowed">前へ</button>`;
+    }
+    
+    // ページ番号
+    const startPage = Math.max(1, state.devicePagination.page - 2);
+    const endPage = Math.min(state.devicePagination.total_pages, state.devicePagination.page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        if (i === state.devicePagination.page) {
+            html += `<button class="px-3 py-1 bg-blue-600 text-white rounded">${i}</button>`;
+        } else {
+            html += `<button data-action="load-devices" data-page="${i}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">${i}</button>`;
+        }
+    }
+    
+    // 次へボタン
+    if (state.devicePagination.has_next) {
+        html += `<button data-action="load-devices" data-page="${state.devicePagination.page + 1}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">次へ</button>`;
+    } else {
+        html += `<button disabled class="px-3 py-1 border border-gray-300 text-gray-400 rounded cursor-not-allowed">次へ</button>`;
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
 }
 
 // =============================================================================
@@ -281,13 +323,51 @@ function getStatusLabel(status) {
     }
 }
 
-// ページネーション関数をグローバルに公開（HTML onclick用）
-window.loadDevices = loadDevices;
+// =============================================================================
+// イベント委譲ハンドラー
+// =============================================================================
 
-// デバイス操作関数をグローバルに公開（HTML onclick用）
-window.editDevice = editDevice;
-window.syncDevice = syncDevice;
-window.deleteDevice = deleteDevice;
+function setupDeviceEventDelegation() {
+    // デバイステーブルのイベント委譲
+    const devicesTable = document.getElementById('devices-table-body');
+    if (devicesTable) {
+        devicesTable.addEventListener('click', function(e) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+            
+            const action = button.dataset.action;
+            const deviceId = button.dataset.deviceId;
+            
+            switch (action) {
+                case 'edit-device':
+                    editDevice(deviceId);
+                    break;
+                case 'sync-device':
+                    syncDevice(deviceId);
+                    break;
+                case 'delete-device':
+                    deleteDevice(deviceId);
+                    break;
+            }
+        });
+    }
+    
+    // デバイスページネーションのイベント委譲
+    const devicesPagination = document.getElementById('devices-pagination');
+    if (devicesPagination) {
+        devicesPagination.addEventListener('click', function(e) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+            
+            const action = button.dataset.action;
+            const page = parseInt(button.dataset.page);
+            
+            if (action === 'load-devices' && page) {
+                loadDevices(page);
+            }
+        });
+    }
+}
 
 // =============================================================================
 // 初期化とイベントリスナー（exportする）
@@ -301,6 +381,9 @@ export function initializeDeviceManagement() {
     if (addDeviceBtn) {
         addDeviceBtn.addEventListener('click', showAddDeviceModal);
     }
+    
+    // イベント委譲の設定
+    setupDeviceEventDelegation();
     
     // 初回データ読み込み
     loadDevices();

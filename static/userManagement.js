@@ -3,7 +3,7 @@
  * ユーザーの一覧表示、作成、編集機能を提供
  */
 
-import { state, showNotification, showModal, closeModal, renderPagination, formatDate, copyToClipboard } from './core.js';
+import { state, showNotification, showModal, closeModal, formatDate, copyToClipboard } from './core.js';
 
 // =============================================================================
 // ユーザー管理メイン機能
@@ -84,8 +84,8 @@ function renderUsersTable() {
                 ${formatDate(user.updated_at)}
             </td>
             <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onclick="editUser('${user.user_id}')" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
-                <button onclick="deleteUser('${user.user_id}')" class="text-red-600 hover:text-red-900">削除</button>
+                <button data-action="edit-user" data-user-id="${user.user_id}" class="text-blue-600 hover:text-blue-900 mr-3">編集</button>
+                <button data-action="delete-user" data-user-id="${user.user_id}" class="text-red-600 hover:text-red-900">削除</button>
             </td>
         `;
         
@@ -94,11 +94,50 @@ function renderUsersTable() {
 }
 
 function renderUsersPagination() {
-    renderPagination('users-pagination', state.userPagination, 'loadUsers');
+    const container = document.getElementById('users-pagination');
+    if (!container) return;
+    
+    let html = `
+        <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                ${state.userPagination.total}件中 ${((state.userPagination.page - 1) * state.userPagination.per_page) + 1}-${Math.min(state.userPagination.page * state.userPagination.per_page, state.userPagination.total)}件を表示
+            </div>
+            <div class="flex space-x-2">
+    `;
+    
+    // 前へボタン
+    if (state.userPagination.has_prev) {
+        html += `<button data-action="load-users" data-page="${state.userPagination.page - 1}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">前へ</button>`;
+    } else {
+        html += `<button disabled class="px-3 py-1 border border-gray-300 text-gray-400 rounded cursor-not-allowed">前へ</button>`;
+    }
+    
+    // ページ番号
+    const startPage = Math.max(1, state.userPagination.page - 2);
+    const endPage = Math.min(state.userPagination.total_pages, state.userPagination.page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        if (i === state.userPagination.page) {
+            html += `<button class="px-3 py-1 bg-blue-600 text-white rounded">${i}</button>`;
+        } else {
+            html += `<button data-action="load-users" data-page="${i}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">${i}</button>`;
+        }
+    }
+    
+    // 次へボタン
+    if (state.userPagination.has_next) {
+        html += `<button data-action="load-users" data-page="${state.userPagination.page + 1}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">次へ</button>`;
+    } else {
+        html += `<button disabled class="px-3 py-1 border border-gray-300 text-gray-400 rounded cursor-not-allowed">次へ</button>`;
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
 }
-
-// ページネーション関数をグローバルに公開（HTML onclick用）
-window.loadUsers = loadUsers;
 
 // =============================================================================
 // ユーザー作成・編集・削除
@@ -116,7 +155,7 @@ function showAddUserModal() {
                 <input type="email" id="user-email" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
             </div>
             <div class="flex justify-end space-x-3">
-                <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                <button type="button" data-action="close-modal" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                     キャンセル
                 </button>
                 <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
@@ -176,7 +215,7 @@ async function editUser(userId) {
                 </select>
             </div>
             <div class="flex justify-end space-x-3">
-                <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                <button type="button" data-action="close-modal" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                     キャンセル
                 </button>
                 <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
@@ -226,9 +265,56 @@ async function deleteUser(userId) {
     }
 }
 
-// ユーザー操作関数をグローバルに公開（HTML onclick用）
-window.editUser = editUser;
-window.deleteUser = deleteUser;
+// =============================================================================
+// イベント委譲ハンドラー
+// =============================================================================
+
+function setupUserEventDelegation() {
+    // ユーザーテーブルのイベント委譲
+    const usersTable = document.getElementById('users-table-body');
+    if (usersTable) {
+        usersTable.addEventListener('click', function(e) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+            
+            const action = button.dataset.action;
+            const userId = button.dataset.userId;
+            
+            switch (action) {
+                case 'edit-user':
+                    editUser(userId);
+                    break;
+                case 'delete-user':
+                    deleteUser(userId);
+                    break;
+            }
+        });
+    }
+    
+    // ユーザーページネーションのイベント委譲
+    const usersPagination = document.getElementById('users-pagination');
+    if (usersPagination) {
+        usersPagination.addEventListener('click', function(e) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+            
+            const action = button.dataset.action;
+            const page = parseInt(button.dataset.page);
+            
+            if (action === 'load-users' && page) {
+                loadUsers(page);
+            }
+        });
+    }
+    
+    // モーダルのイベント委譲（動的に追加されるため、documentレベルで処理）
+    document.addEventListener('click', function(e) {
+        const button = e.target.closest('button[data-action="close-modal"]');
+        if (button) {
+            closeModal();
+        }
+    });
+}
 
 // =============================================================================
 // ユーティリティ関数
@@ -273,6 +359,9 @@ export function initializeUserManagement() {
     if (addUserBtn) {
         addUserBtn.addEventListener('click', showAddUserModal);
     }
+    
+    // イベント委譲の設定
+    setupUserEventDelegation();
     
     // 初回データ読み込み
     loadUsers();

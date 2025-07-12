@@ -3,7 +3,7 @@
  * 通知の一覧表示、作成、一括送信、統計表示機能を提供
  */
 
-import { state, showNotification, showModal, closeModal, renderPagination, formatDate, copyToClipboard } from './core.js';
+import { state, showNotification, showModal, closeModal, formatDate, copyToClipboard } from './core.js';
 
 // =============================================================================
 // 通知管理メイン機能
@@ -77,7 +77,7 @@ function renderNotificationsTable() {
                 ${formatDate(notification.created_at)}
             </td>
             <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onclick="deleteNotification('${notification.id}')" class="text-red-600 hover:text-red-900">削除</button>
+                <button data-action="delete-notification" data-notification-id="${notification.id}" class="text-red-600 hover:text-red-900">削除</button>
             </td>
         `;
         
@@ -86,7 +86,49 @@ function renderNotificationsTable() {
 }
 
 function renderNotificationsPagination() {
-    renderPagination('notifications-pagination', state.notificationPagination, 'loadNotifications');
+    const container = document.getElementById('notifications-pagination');
+    if (!container) return;
+    
+    let html = `
+        <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                ${state.notificationPagination.total}件中 ${((state.notificationPagination.page - 1) * state.notificationPagination.per_page) + 1}-${Math.min(state.notificationPagination.page * state.notificationPagination.per_page, state.notificationPagination.total)}件を表示
+            </div>
+            <div class="flex space-x-2">
+    `;
+    
+    // 前へボタン
+    if (state.notificationPagination.has_prev) {
+        html += `<button data-action="load-notifications" data-page="${state.notificationPagination.page - 1}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">前へ</button>`;
+    } else {
+        html += `<button disabled class="px-3 py-1 border border-gray-300 text-gray-400 rounded cursor-not-allowed">前へ</button>`;
+    }
+    
+    // ページ番号
+    const startPage = Math.max(1, state.notificationPagination.page - 2);
+    const endPage = Math.min(state.notificationPagination.total_pages, state.notificationPagination.page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        if (i === state.notificationPagination.page) {
+            html += `<button class="px-3 py-1 bg-blue-600 text-white rounded">${i}</button>`;
+        } else {
+            html += `<button data-action="load-notifications" data-page="${i}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">${i}</button>`;
+        }
+    }
+    
+    // 次へボタン
+    if (state.notificationPagination.has_next) {
+        html += `<button data-action="load-notifications" data-page="${state.notificationPagination.page + 1}" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">次へ</button>`;
+    } else {
+        html += `<button disabled class="px-3 py-1 border border-gray-300 text-gray-400 rounded cursor-not-allowed">次へ</button>`;
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
 }
 
 // =============================================================================
@@ -128,11 +170,11 @@ function showAddNotificationModal() {
             </div>
         </form>
         <div class="flex justify-end mt-6 space-x-3">
-            <button onclick="closeModal()" type="button" 
+            <button data-action="close-modal" type="button" 
                     class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                 キャンセル
             </button>
-            <button onclick="createNotification()" type="button" 
+            <button data-action="create-notification" type="button" 
                     class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700">
                 通知を作成
             </button>
@@ -217,11 +259,11 @@ function showBroadcastNotificationModal() {
             </div>
         </form>
         <div class="flex justify-end mt-6 space-x-3">
-            <button onclick="closeModal()" type="button" 
+            <button data-action="close-modal" type="button" 
                     class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                 キャンセル
             </button>
-            <button onclick="sendBroadcastNotification()" type="button" 
+            <button data-action="send-broadcast-notification" type="button" 
                     class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700">
                 一括送信
             </button>
@@ -395,14 +437,65 @@ function getNotificationTypeLabel(type) {
     return getTypeLabel(type);
 }
 
-// ページネーション関数をグローバルに公開（HTML onclick用）
-window.loadNotifications = loadNotifications;
+// =============================================================================
+// イベント委譲ハンドラー
+// =============================================================================
 
-// 通知操作関数をグローバルに公開（HTML onclick用）
-window.createNotification = createNotification;
-window.sendBroadcastNotification = sendBroadcastNotification;
-window.markAsRead = markAsRead;
-window.deleteNotification = deleteNotification;
+function setupNotificationEventDelegation() {
+    // 通知テーブルのイベント委譲
+    const notificationsTable = document.getElementById('notifications-table-body');
+    if (notificationsTable) {
+        notificationsTable.addEventListener('click', function(e) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+            
+            const action = button.dataset.action;
+            const notificationId = button.dataset.notificationId;
+            
+            switch (action) {
+                case 'delete-notification':
+                    deleteNotification(notificationId);
+                    break;
+            }
+        });
+    }
+    
+    // 通知ページネーションのイベント委譲
+    const notificationsPagination = document.getElementById('notifications-pagination');
+    if (notificationsPagination) {
+        notificationsPagination.addEventListener('click', function(e) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+            
+            const action = button.dataset.action;
+            const page = parseInt(button.dataset.page);
+            
+            if (action === 'load-notifications' && page) {
+                loadNotifications(page);
+            }
+        });
+    }
+    
+    // モーダル内のイベント委譲（動的に追加されるため、documentレベルで処理）
+    document.addEventListener('click', function(e) {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+        
+        const action = button.dataset.action;
+        
+        switch (action) {
+            case 'close-modal':
+                closeModal();
+                break;
+            case 'create-notification':
+                createNotification();
+                break;
+            case 'send-broadcast-notification':
+                sendBroadcastNotification();
+                break;
+        }
+    });
+}
 
 // =============================================================================
 // 初期化とイベントリスナー（exportする）
@@ -426,6 +519,9 @@ export function initializeNotificationManagement() {
     if (refreshNotificationsBtn) {
         refreshNotificationsBtn.addEventListener('click', loadNotifications);
     }
+    
+    // イベント委譲の設定
+    setupNotificationEventDelegation();
     
     // 初回データ読み込み
     loadNotifications();

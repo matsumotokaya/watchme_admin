@@ -93,8 +93,6 @@ export function closeModal() {
     }
 }
 
-// グローバルからもアクセス可能にする（HTML onclick用）
-window.closeModal = closeModal;
 
 // =============================================================================
 // タブ機能
@@ -135,55 +133,6 @@ export function switchTab(tabId) {
     console.log(`タブ切り替え: ${tabId}`);
 }
 
-// =============================================================================
-// ページネーション共通機能
-// =============================================================================
-
-export function renderPagination(containerId, pagination, loadFunction) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    
-    let html = `
-        <div class="flex items-center justify-between">
-            <div class="text-sm text-gray-700">
-                ${pagination.total}件中 ${((pagination.page - 1) * pagination.per_page) + 1}-${Math.min(pagination.page * pagination.per_page, pagination.total)}件を表示
-            </div>
-            <div class="flex space-x-2">
-    `;
-    
-    // 前へボタン
-    if (pagination.has_prev) {
-        html += `<button onclick="${loadFunction}(${pagination.page - 1})" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">前へ</button>`;
-    } else {
-        html += `<button disabled class="px-3 py-1 border border-gray-300 text-gray-400 rounded cursor-not-allowed">前へ</button>`;
-    }
-    
-    // ページ番号
-    const startPage = Math.max(1, pagination.page - 2);
-    const endPage = Math.min(pagination.total_pages, pagination.page + 2);
-    
-    for (let i = startPage; i <= endPage; i++) {
-        if (i === pagination.page) {
-            html += `<button class="px-3 py-1 bg-blue-600 text-white rounded">${i}</button>`;
-        } else {
-            html += `<button onclick="${loadFunction}(${i})" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">${i}</button>`;
-        }
-    }
-    
-    // 次へボタン
-    if (pagination.has_next) {
-        html += `<button onclick="${loadFunction}(${pagination.page + 1})" class="px-3 py-1 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded">次へ</button>`;
-    } else {
-        html += `<button disabled class="px-3 py-1 border border-gray-300 text-gray-400 rounded cursor-not-allowed">次へ</button>`;
-    }
-    
-    html += `
-            </div>
-        </div>
-    `;
-    
-    container.innerHTML = html;
-}
 
 // =============================================================================
 // ユーティリティ関数
@@ -204,8 +153,6 @@ export function copyToClipboard(text) {
     });
 }
 
-// グローバルからもアクセス可能にする（HTML onclick用）
-window.copyToClipboard = copyToClipboard;
 
 // =============================================================================
 // 統計情報読み込み
