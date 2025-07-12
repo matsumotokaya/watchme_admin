@@ -11,6 +11,7 @@ import { showNotification } from './core.js';
 
 export function initializePsychologyAnalysis() {
     initializeAllDates();
+    initializeBatchProcessingDefaults();
     setupPsychologyEventListeners();
     console.log('心理分析モジュール初期化完了');
 }
@@ -26,6 +27,25 @@ function initializeAllDates() {
         const el = document.getElementById(id);
         if (el) el.value = today;
     });
+}
+
+function initializeBatchProcessingDefaults() {
+    // バッチ処理のデフォルト値を設定
+    const deviceIdInput = document.getElementById('batch-psychology-device-id');
+    const dateInput = document.getElementById('batch-psychology-date');
+    
+    // デバイスIDのデフォルト値（HTMLでも設定済みだが念のため）
+    if (deviceIdInput && !deviceIdInput.value.trim()) {
+        deviceIdInput.value = 'd067d407-cf73-4174-a9c1-d91fb60d64d0';
+    }
+    
+    // 日付のデフォルト値（本日）
+    if (dateInput && !dateInput.value) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
+    
+    console.log('バッチ処理デフォルト値設定完了');
 }
 
 function setupPsychologyEventListeners() {
