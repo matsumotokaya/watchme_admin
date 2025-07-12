@@ -47,19 +47,16 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Supabaseクライアントの遅延初期化
-supabase_client = None
+# Supabaseクライアントの即時初期化
+try:
+    supabase_client = SupabaseClient()
+    print("✅ Supabase client initialized successfully")
+except Exception as e:
+    print(f"❌ Failed to initialize Supabase client: {e}")
+    raise RuntimeError(f"Supabase接続に失敗しました: {e}") from e
 
 def get_supabase_client():
-    """Supabaseクライアントを遅延初期化して取得"""
-    global supabase_client
-    if supabase_client is None:
-        try:
-            supabase_client = SupabaseClient()
-            print("Supabase client initialized successfully")
-        except Exception as e:
-            print(f"Failed to initialize Supabase client: {e}")
-            raise e
+    """初期化済みのSupabaseクライアントを取得"""
     return supabase_client
 
 
