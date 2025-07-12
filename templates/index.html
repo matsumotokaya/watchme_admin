@@ -607,6 +607,13 @@
         </div>
     </div>
 
+    <!-- コンポーネントベースのJavaScript読み込み -->
+    <!-- 必ずこの順序で読み込む：core → 各管理モジュール → メイン -->
+    <script src="/static/core.js"></script>
+    <script src="/static/userManagement.js"></script>
+    <script src="/static/deviceManagement.js"></script>
+    <script src="/static/notificationManagement.js"></script>
+    <script src="/static/psychologyAnalysis.js"></script>
     <script src="/static/admin.js"></script>
 </body>
 </html>
