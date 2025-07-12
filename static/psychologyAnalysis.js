@@ -3,22 +3,29 @@
  * Whisper音声文字起こし、プロンプト生成、ChatGPT分析機能を提供
  */
 
+import { showNotification } from './core.js';
+
 // =============================================================================
-// 初期化関数
+// 初期化関数 (Export)
 // =============================================================================
 
-function initializePsychologyAnalysis() {
-    initializeWhisperDate();
-    initializePromptDate();
-    initializeChatGPTDate();
-    initializeSEDDate();
-    initializeSEDAggregatorDate();
-    initializeOpenSMILEDate();
-    
-    // イベントリスナーの設定
+export function initializePsychologyAnalysis() {
+    initializeAllDates();
     setupPsychologyEventListeners();
-    
     console.log('心理分析モジュール初期化完了');
+}
+
+function initializeAllDates() {
+    const dateInputs = [
+        'whisper-date', 'prompt-date', 'chatgpt-date',
+        'sed-date', 'sed-aggregator-date', 'opensmile-date', 'aggregator-date',
+        'batch-psychology-date'
+    ];
+    const today = new Date().toISOString().split('T')[0];
+    dateInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = today;
+    });
 }
 
 function setupPsychologyEventListeners() {
@@ -62,6 +69,12 @@ function setupPsychologyEventListeners() {
     const startAggregatorBtn = document.getElementById('start-aggregator-btn');
     if (startAggregatorBtn) {
         startAggregatorBtn.addEventListener('click', startOpenSMILEAggregator);
+    }
+
+    // バッチ処理機能のイベントリスナー
+    const startPsychologyBatchBtn = document.getElementById('start-psychology-batch-btn');
+    if (startPsychologyBatchBtn) {
+        startPsychologyBatchBtn.addEventListener('click', startPsychologyBatch);
     }
 }
 
@@ -121,6 +134,64 @@ function initializeDefaultUserSession() {
     const userSessionInput = document.getElementById('user-session');
     if (userSessionInput) {
         userSessionInput.value = 'default-session';
+    }
+}
+
+// =============================================================================
+// バッチ処理機能
+// =============================================================================
+
+async function startPsychologyBatch() {
+    const deviceId = document.getElementById('batch-psychology-device-id').value.trim();
+    const date = document.getElementById('batch-psychology-date').value;
+    const button = document.getElementById('start-psychology-batch-btn');
+    const logContainer = document.getElementById('batch-psychology-log-container');
+    const logElement = document.getElementById('batch-psychology-log');
+
+    if (!deviceId || !date) {
+        showNotification('デバイスIDと日付を入力してください', 'error');
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = '🔄 実行中...';
+    logContainer.classList.remove('hidden');
+    logElement.innerHTML = '';
+
+    const log = (message, isError = false) => {
+        const timestamp = new Date().toLocaleTimeString();
+        const colorClass = isError ? 'text-red-400' : 'text-green-400';
+        logElement.innerHTML += `<div class="flex"><div class="w-20 text-gray-500">${timestamp}</div><div class="flex-1 ${colorClass}">${message}</div></div>`;
+        logContainer.scrollTop = logContainer.scrollHeight;
+    };
+
+    try {
+        log('心理グラフ作成バッチを開始します...');
+        const response = await axios.post('/api/batch/create-psychology-graph', {
+            device_id: deviceId,
+            date: date
+        });
+
+        const results = response.data.results;
+        results.forEach(result => {
+            log(`ステップ ${result.step}: ${result.message}`, !result.success);
+        });
+
+        if (response.data.success) {
+            log('✅ バッチ処理が正常に完了しました。');
+            showNotification('心理グラフ作成バッチが完了しました。', 'success');
+        } else {
+            throw new Error(response.data.message || 'バッチ処理中に不明なエラーが発生しました。');
+        }
+
+    } catch (error) {
+        console.error('バッチ処理エラー:', error);
+        const errorMessage = error.response?.data?.detail || error.message || 'バッチ処理に失敗しました。';
+        log(`❌ 重大なエラー: ${errorMessage}`, true);
+        showNotification(errorMessage, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = '🚀 バッチ処理開始';
     }
 }
 

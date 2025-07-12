@@ -7,6 +7,7 @@ import { initializeCore, loadStats } from './core.js';
 import { initializeUserManagement } from './userManagement.js';
 import { initializeNotificationManagement } from './notificationManagement.js';
 import { initializeDeviceManagement } from './deviceManagement.js';
+import { initializePsychologyAnalysis } from './psychologyAnalysis.js';
 
 // =============================================================================
 // メイン初期化処理
@@ -31,8 +32,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // 5. デバイス管理モジュールの初期化
         initializeDeviceManagement();
         
-        // 6. 他のモジュールの初期化（現在は簡素化）
-        initializeBasicModules();
+        // 6. 心理分析モジュールの初期化
+        initializePsychologyAnalysis();
         
         console.log('WatchMe Admin - 初期化完了');
         
@@ -46,25 +47,3 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
     }
 });
-
-// =============================================================================
-// 基本モジュールの簡易初期化
-// =============================================================================
-
-function initializeBasicModules() {
-    console.log('基本モジュール初期化開始');
-    
-    // デバイス管理は専用モジュールで処理済み
-    
-    // 通知管理は専用モジュールで処理済み
-    
-    // 心理分析の基本機能
-    const startWhisperBtn = document.getElementById('start-whisper-btn');
-    if (startWhisperBtn) {
-        startWhisperBtn.addEventListener('click', function() {
-            alert('Whisper処理機能は開発中です');
-        });
-    }
-    
-    console.log('基本モジュール初期化完了');
-}

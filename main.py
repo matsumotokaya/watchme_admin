@@ -628,6 +628,69 @@ async def get_notification_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"通知統計の取得に失敗しました: {str(e)}")
 
+# =============================================================================
+# バッチ処理API
+# =============================================================================
+
+import httpx
+import asyncio
+
+# APIエンドポイントの定義
+API_ENDPOINTS = {
+    "whisper": "http://localhost:8001/fetch-and-transcribe",
+    "prompt_gen": "http://localhost:8009/generate-mood-prompt-supabase",
+    "chatgpt": "http://localhost:8002/analyze-vibegraph-supabase"
+}
+
+async def call_api(session, step_name, url, method='post', json_data=None, params=None):
+    """指定されたAPIを呼び出し、結果を返す"""
+    try:
+        print(f"🔗 APIコール開始: {step_name} -> {url}")
+        if method == 'post':
+            response = await session.post(url, json=json_data, timeout=300.0)
+        else:
+            response = await session.get(url, params=params, timeout=300.0)
+        
+        response.raise_for_status() # HTTPエラーがあれば例外を発生
+        return {"step": step_name, "success": True, "message": "成功", "data": response.json()}
+    except httpx.HTTPStatusError as e:
+        return {"step": step_name, "success": False, "message": f"APIエラー: {e.response.status_code} - {e.response.text}"}
+    except httpx.RequestError as e:
+        return {"step": step_name, "success": False, "message": f"リクエストエラー: {e}"}
+
+@app.post("/api/batch/create-psychology-graph")
+async def create_psychology_graph_batch(request: Request):
+    """心理グラフ作成のバッチ処理を実行する"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    results = []
+    async with httpx.AsyncClient() as session:
+        # ステップ1: Whisper
+        whisper_result = await call_api(session, "Whisper", API_ENDPOINTS["whisper"], json_data={"device_id": device_id, "date": date})
+        results.append(whisper_result)
+        if not whisper_result["success"]:
+            return {"success": False, "message": "Whisper処理で失敗しました。", "results": results}
+
+        # ステップ2: プロンプト生成
+        prompt_params = {"device_id": device_id, "date": date}
+        prompt_result = await call_api(session, "プロンプト生成", API_ENDPOINTS["prompt_gen"], method='get', params=prompt_params)
+        results.append(prompt_result)
+        if not prompt_result["success"]:
+            return {"success": False, "message": "プロンプT生成で失敗しました。", "results": results}
+
+        # ステップ3: ChatGPT
+        chatgpt_result = await call_api(session, "ChatGPT分析", API_ENDPOINTS["chatgpt"], json_data={"device_id": device_id, "date": date})
+        results.append(chatgpt_result)
+        if not chatgpt_result["success"]:
+            return {"success": False, "message": "ChatGPT分析で失敗しました。", "results": results}
+
+    return {"success": True, "message": "バッチ処理が正常に完了しました。", "results": results}
+
 
 # =============================================================================
 # ヘルスチェック
