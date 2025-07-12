@@ -161,6 +161,92 @@ function initializeDefaultUserSession() {
 // バッチ処理機能
 // =============================================================================
 
+async function executeBatchProcessSteps(deviceId, date, log) {
+    // ステップ1: Whisper音声文字起こし
+    log('🔍 Whisper APIサーバー(ポート8001)の状態を確認中...');
+    
+    try {
+        log('🎤 Whisper音声文字起こし処理を開始...');
+        const whisperResponse = await axios.post('/api/batch/whisper-step', {
+            device_id: deviceId,
+            date: date
+        });
+        
+        const whisperData = whisperResponse.data;
+        if (whisperData.success) {
+            log('🎤 Whisper音声文字起こし: ✅ 処理完了');
+            if (whisperData.data && whisperData.data.summary) {
+                const summary = whisperData.data.summary;
+                log(`   📊 処理結果: 取得${summary.audio_fetched || 0}件, 保存${summary.supabase_saved || 0}件, スキップ${summary.skipped_existing || 0}件`);
+            }
+        } else {
+            throw new Error(`Whisper処理エラー: ${whisperData.message}`);
+        }
+    } catch (error) {
+        log(`❌ Whisper処理エラー: ${error.message}`, true);
+        throw error;
+    }
+    
+    // 小さな待機時間を入れて時間差を作る
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // ステップ2: プロンプト生成
+    log('🔍 プロンプト生成APIサーバー(ポート8009)の状態を確認中...');
+    
+    try {
+        log('📝 プロンプト生成処理を開始...');
+        const promptResponse = await axios.post('/api/batch/prompt-step', {
+            device_id: deviceId,
+            date: date
+        });
+        
+        const promptData = promptResponse.data;
+        if (promptData.success) {
+            log('📝 プロンプト生成: ✅ 処理完了');
+            if (promptData.data && promptData.data.output_path) {
+                log(`   📄 プロンプト生成完了: ${promptData.data.output_path}`);
+            }
+        } else {
+            throw new Error(`プロンプト生成エラー: ${promptData.message}`);
+        }
+    } catch (error) {
+        log(`❌ プロンプト生成エラー: ${error.message}`, true);
+        throw error;
+    }
+    
+    // 小さな待機時間を入れて時間差を作る
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // ステップ3: ChatGPT心理分析
+    log('🔍 ChatGPT APIサーバー(ポート8002)の状態を確認中...');
+    
+    try {
+        log('🧠 ChatGPT心理分析処理を開始...');
+        const chatgptResponse = await axios.post('/api/batch/chatgpt-step', {
+            device_id: deviceId,
+            date: date
+        });
+        
+        const chatgptData = chatgptResponse.data;
+        if (chatgptData.success) {
+            log('🧠 ChatGPT心理分析: ✅ 処理完了');
+            if (chatgptData.data) {
+                const data = chatgptData.data;
+                if (data.average_score) {
+                    log(`   📈 分析結果: 平均スコア ${data.average_score}, ポジティブ${data.positive_time_minutes || 0}分`);
+                }
+            }
+        } else {
+            throw new Error(`ChatGPT分析エラー: ${chatgptData.message}`);
+        }
+    } catch (error) {
+        log(`❌ ChatGPT分析エラー: ${error.message}`, true);
+        throw error;
+    }
+    
+    log('🎉 全てのステップが正常に完了しました。');
+}
+
 async function startPsychologyBatch() {
     const deviceId = document.getElementById('batch-psychology-device-id').value.trim();
     const date = document.getElementById('batch-psychology-date').value;
@@ -178,64 +264,94 @@ async function startPsychologyBatch() {
     logContainer.classList.remove('hidden');
     logElement.innerHTML = '';
 
-    const log = (message, isError = false, isWarning = false) => {
-        const timestamp = new Date().toLocaleTimeString();
-        let colorClass = 'text-green-400';
-        if (isError) {
-            colorClass = 'text-red-400';
-        } else if (isWarning) {
-            colorClass = 'text-yellow-400';
-        }
-        logElement.innerHTML += `<div class="flex"><div class="w-20 text-gray-500">${timestamp}</div><div class="flex-1 ${colorClass}">${message}</div></div>`;
-        logContainer.scrollTop = logContainer.scrollHeight;
+    // 進行状況表示のためのカウンター
+    let logDelay = 0;
+    
+    const logWithDelay = (message, isError = false, isWarning = false, delayMs = 400) => {
+        setTimeout(() => {
+            const timestamp = new Date().toLocaleTimeString();
+            let colorClass = 'text-green-400';
+            if (isError) {
+                colorClass = 'text-red-400';
+            } else if (isWarning) {
+                colorClass = 'text-yellow-400';
+            }
+            logElement.innerHTML += `<div class="flex"><div class="w-20 text-gray-500">${timestamp}</div><div class="flex-1 ${colorClass}">${message}</div></div>`;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }, logDelay);
+        logDelay += delayMs;
     };
 
     try {
-        log('心理グラフ作成バッチを開始します...');
-        const response = await axios.post('/api/batch/create-psychology-graph', {
-            device_id: deviceId,
-            date: date
+        // 処理開始前のログを段階的に表示
+        logWithDelay('🚀 心理グラフ作成バッチを開始します...', false, false, 100);
+        logWithDelay('📋 実行予定: ①Whisper音声文字起こし → ②プロンプト生成 → ③ChatGPT心理分析', false, false, 300);
+        logWithDelay('🔍 APIサーバーの状態を確認中...', false, false, 500);
+        logWithDelay('🔄 バッチ処理リクエストを送信中...', false, false, 600);
+        
+        // APIリクエストを実際の遅延後に実行
+        const response = await new Promise((resolve, reject) => {
+            setTimeout(async () => {
+                try {
+                    const result = await axios.post('/api/batch/create-psychology-graph', {
+                        device_id: deviceId,
+                        date: date
+                    });
+                    resolve(result);
+                } catch (error) {
+                    reject(error);
+                }
+            }, logDelay);
         });
 
+        // 結果を段階的に表示（時間差を大きくして）
         const results = response.data.results;
-        results.forEach((result, index) => {
+        logDelay = 0; // 遅延をリセット
+        
+        for (let i = 0; i < results.length; i++) {
+            const result = results[i];
             const isError = !result.success;
             const isWarning = result.step.includes('確認');
             
-            // より詳細なステップ表示
+            // より詳細なステップ表示とリアルタイム感の演出
             if (result.step === '初期化') {
-                log(`🚀 ${result.message}`, isError);
+                logWithDelay(`🚀 ${result.message}`, isError, false, 200);
             } else if (result.step.includes('サーバー確認')) {
-                log(`${result.message}`, isError, isWarning);
+                logWithDelay(`${result.message}`, isError, isWarning, 300);
             } else if (result.step.includes('Whisper')) {
-                log(`🎤 ${result.step}: ${result.message}`, isError);
+                logWithDelay(`🎤 ${result.step}: 音声文字起こしを開始中...`, false, false, 400);
+                logWithDelay(`🎤 ${result.step}: ${result.message}`, isError, false, 600);
                 if (result.success && result.data) {
                     const summary = result.data.summary || {};
-                    log(`   📊 処理結果: 取得${summary.audio_fetched || 0}件, 保存${summary.supabase_saved || 0}件, スキップ${summary.skipped_existing || 0}件`, false);
+                    logWithDelay(`   📊 処理結果: 取得${summary.audio_fetched || 0}件, 保存${summary.supabase_saved || 0}件, スキップ${summary.skipped_existing || 0}件`, false, false, 300);
                 }
             } else if (result.step.includes('プロンプト')) {
-                log(`📝 ${result.step}: ${result.message}`, isError);
+                logWithDelay(`📝 ${result.step}: プロンプト生成を開始中...`, false, false, 400);
+                logWithDelay(`📝 ${result.step}: ${result.message}`, isError, false, 500);
                 if (result.success && result.data) {
-                    log(`   📄 プロンプト生成完了: ${result.data.output_path}`, false);
+                    logWithDelay(`   📄 プロンプト生成完了: ${result.data.output_path}`, false, false, 300);
                 }
             } else if (result.step.includes('ChatGPT')) {
-                log(`🧠 ${result.step}: ${result.message}`, isError);
+                logWithDelay(`🧠 ${result.step}: ChatGPT分析を開始中...`, false, false, 400);
+                logWithDelay(`🧠 ${result.step}: ${result.message}`, isError, false, 700);
                 if (result.success && result.data) {
                     const data = result.data;
                     if (data.average_score) {
-                        log(`   📈 分析結果: 平均スコア ${data.average_score}, ポジティブ${data.positive_time_minutes}分`, false);
+                        logWithDelay(`   📈 分析結果: 平均スコア ${data.average_score}, ポジティブ${data.positive_time_minutes || 0}分`, false, false, 400);
                     }
                 }
             } else if (result.step === '完了') {
-                log(`🎉 ${result.message}`, isError);
+                logWithDelay(`🎉 ${result.message}`, isError, false, 500);
             } else {
-                log(`⚙️ ${result.step}: ${result.message}`, isError);
+                logWithDelay(`⚙️ ${result.step}: ${result.message}`, isError, false, 300);
             }
-        });
+        }
 
         if (response.data.success) {
-            log('✅ バッチ処理が正常に完了しました。');
-            showNotification('心理グラフ作成バッチが完了しました。', 'success');
+            logWithDelay('✅ バッチ処理が正常に完了しました。', false, false, 600);
+            setTimeout(() => {
+                showNotification('心理グラフ作成バッチが完了しました。', 'success');
+            }, logDelay + 500);
         } else {
             throw new Error(response.data.message || 'バッチ処理中に不明なエラーが発生しました。');
         }
@@ -243,11 +359,15 @@ async function startPsychologyBatch() {
     } catch (error) {
         console.error('バッチ処理エラー:', error);
         const errorMessage = error.response?.data?.detail || error.message || 'バッチ処理に失敗しました。';
-        log(`❌ 重大なエラー: ${errorMessage}`, true);
-        showNotification(errorMessage, 'error');
+        logWithDelay(`❌ 重大なエラー: ${errorMessage}`, true, false, 200);
+        setTimeout(() => {
+            showNotification(errorMessage, 'error');
+        }, logDelay + 300);
     } finally {
-        button.disabled = false;
-        button.textContent = '🚀 バッチ処理開始';
+        setTimeout(() => {
+            button.disabled = false;
+            button.textContent = '🚀 バッチ処理開始';
+        }, logDelay + 800);
     }
 }
 

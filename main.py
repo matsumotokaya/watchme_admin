@@ -758,6 +758,66 @@ async def create_psychology_graph_batch(request: Request):
 
 
 # =============================================================================
+# バッチ処理 - 個別ステップAPI（リアルタイム表示用）
+# =============================================================================
+
+@app.post("/api/batch/whisper-step")
+async def batch_whisper_step(request: Request):
+    """Whisperステップのみを実行"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient() as session:
+        whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data={"device_id": device_id, "date": date})
+        
+        if whisper_result["success"]:
+            return {"success": True, "message": "Whisper処理完了", "data": whisper_result.get("data")}
+        else:
+            return {"success": False, "message": whisper_result.get("message", "Whisper処理に失敗しました")}
+
+@app.post("/api/batch/prompt-step")
+async def batch_prompt_step(request: Request):
+    """プロンプト生成ステップのみを実行"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient() as session:
+        prompt_params = {"device_id": device_id, "date": date}
+        prompt_result = await call_api(session, "プロンプト生成", API_ENDPOINTS["prompt_gen"], method='get', params=prompt_params)
+        
+        if prompt_result["success"]:
+            return {"success": True, "message": "プロンプト生成完了", "data": prompt_result.get("data")}
+        else:
+            return {"success": False, "message": prompt_result.get("message", "プロンプト生成に失敗しました")}
+
+@app.post("/api/batch/chatgpt-step")
+async def batch_chatgpt_step(request: Request):
+    """ChatGPT分析ステップのみを実行"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient() as session:
+        chatgpt_result = await call_api(session, "ChatGPT心理分析", API_ENDPOINTS["chatgpt"], json_data={"device_id": device_id, "date": date})
+        
+        if chatgpt_result["success"]:
+            return {"success": True, "message": "ChatGPT分析完了", "data": chatgpt_result.get("data")}
+        else:
+            return {"success": False, "message": chatgpt_result.get("message", "ChatGPT分析に失敗しました")}
+
+
+# =============================================================================
 # ヘルスチェック
 # =============================================================================
 
