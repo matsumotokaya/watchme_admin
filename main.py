@@ -29,7 +29,9 @@ from models.schemas import (
     VirtualMobileDeviceCreate, StatsResponse,
     # 通知管理関連
     NotificationType, Notification, NotificationCreate, NotificationUpdate,
-    NotificationBroadcast, NotificationBroadcastResponse
+    NotificationBroadcast, NotificationBroadcastResponse,
+    # ページネーション関連
+    PaginationParams, PaginatedUsersResponse, PaginatedDevicesResponse, PaginatedNotificationsResponse
 )
 
 app = FastAPI(title="WatchMe Admin (Fixed)", description="修正済みWatchMe管理画面API", version="2.0.0")
@@ -80,9 +82,21 @@ async def read_root(request: Request):
 # Users API - 実際のフィールド構造に基づく
 # =============================================================================
 
-@app.get("/api/users", response_model=List[User])
-async def get_users():
-    """全ユーザーを取得"""
+@app.get("/api/users", response_model=PaginatedUsersResponse)
+async def get_users(page: int = Query(1, ge=1, description="ページ番号"),
+                   per_page: int = Query(20, ge=1, le=100, description="1ページあたりのアイテム数")):
+    """ページネーション付きでユーザーを取得"""
+    try:
+        client = get_supabase_client()
+        result = await client.select_paginated("users", page=page, per_page=per_page, order="created_at.desc")
+        return PaginatedUsersResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ユーザーの取得に失敗しました: {str(e)}")
+
+
+@app.get("/api/users/all", response_model=List[User])
+async def get_all_users():
+    """全ユーザーを取得（後方互換性のため）"""
     try:
         client = get_supabase_client()
         users_data = await client.select("users")
@@ -111,9 +125,21 @@ async def create_user(user: UserCreate):
 # Devices API - user_idフィールドなしの正しい構造
 # =============================================================================
 
-@app.get("/api/devices", response_model=List[Device])
-async def get_devices():
-    """全デバイスを取得"""
+@app.get("/api/devices", response_model=PaginatedDevicesResponse)
+async def get_devices(page: int = Query(1, ge=1, description="ページ番号"),
+                     per_page: int = Query(20, ge=1, le=100, description="1ページあたりのアイテム数")):
+    """ページネーション付きでデバイスを取得"""
+    try:
+        client = get_supabase_client()
+        result = await client.select_paginated("devices", page=page, per_page=per_page, order="registered_at.desc")
+        return PaginatedDevicesResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"デバイスの取得に失敗しました: {str(e)}")
+
+
+@app.get("/api/devices/all", response_model=List[Device])
+async def get_all_devices():
+    """全デバイスを取得（後方互換性のため）"""
     try:
         client = get_supabase_client()
         devices_data = await client.select("devices")
@@ -408,9 +434,21 @@ async def get_users_by_status(status: UserStatus):
 # 通知管理API - Supabase notifications テーブル
 # =============================================================================
 
-@app.get("/api/notifications", response_model=List[Notification])
-async def get_all_notifications():
-    """すべての通知を取得（管理画面用）"""
+@app.get("/api/notifications", response_model=PaginatedNotificationsResponse)
+async def get_all_notifications(page: int = Query(1, ge=1, description="ページ番号"),
+                               per_page: int = Query(20, ge=1, le=100, description="1ページあたりのアイテム数")):
+    """ページネーション付きで通知を取得（管理画面用）"""
+    try:
+        client = get_supabase_client()
+        result = await client.select_paginated("notifications", page=page, per_page=per_page, order="created_at.desc")
+        return PaginatedNotificationsResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"通知一覧の取得に失敗しました: {str(e)}")
+
+
+@app.get("/api/notifications/all", response_model=List[Notification])
+async def get_all_notifications_legacy():
+    """すべての通知を取得（後方互換性のため）"""
     try:
         client = get_supabase_client()
         notifications_data = await client.select("notifications", order="created_at.desc")

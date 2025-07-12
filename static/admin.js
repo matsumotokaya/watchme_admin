@@ -8,6 +8,11 @@ let currentUsers = [];
 let currentDevices = [];
 let currentNotifications = [];
 
+// ページネーション状態
+let userPagination = { page: 1, per_page: 20, total: 0, total_pages: 1, has_next: false, has_prev: false };
+let devicePagination = { page: 1, per_page: 20, total: 0, total_pages: 1, has_next: false, has_prev: false };
+let notificationPagination = { page: 1, per_page: 20, total: 0, total_pages: 1, has_next: false, has_prev: false };
+
 // DOM要素の取得
 const tabButtons = document.querySelectorAll('.tab-button');
 const tabContents = document.querySelectorAll('.tab-content');
@@ -130,26 +135,50 @@ async function loadAllData() {
 // async function loadAuthUsers() - 削除済み（権限エラーのため）
 // auth.usersテーブルは管理者権限でしかアクセスできないため削除
 
-async function loadUsers() {
+async function loadUsers(page = 1) {
     try {
-        const response = await axios.get('/api/users');
-        currentUsers = response.data;
+        const response = await axios.get(`/api/users?page=${page}&per_page=${userPagination.per_page}`);
+        const data = response.data;
+        
+        currentUsers = data.items;
+        userPagination = {
+            page: data.page,
+            per_page: data.per_page,
+            total: data.total,
+            total_pages: data.total_pages,
+            has_next: data.has_next,
+            has_prev: data.has_prev
+        };
+        
         renderUsersTable();
-        console.log(`ユーザー ${currentUsers.length} 件読み込み完了`);
+        renderUsersPagination();
+        console.log(`ユーザー ${currentUsers.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
     } catch (error) {
         console.error('ユーザー読み込みエラー:', error);
         showNotification('ユーザーの読み込みに失敗しました', 'error');
     }
 }
 
-async function loadDevices() {
+async function loadDevices(page = 1) {
     try {
         console.log('デバイスAPI呼び出し開始');
-        const response = await axios.get('/api/devices');
-        console.log('デバイスAPIレスポンス:', response.data);
-        currentDevices = response.data;
+        const response = await axios.get(`/api/devices?page=${page}&per_page=${devicePagination.per_page}`);
+        const data = response.data;
+        console.log('デバイスAPIレスポンス:', data);
+        
+        currentDevices = data.items;
+        devicePagination = {
+            page: data.page,
+            per_page: data.per_page,
+            total: data.total,
+            total_pages: data.total_pages,
+            has_next: data.has_next,
+            has_prev: data.has_prev
+        };
+        
         renderDevicesTable();
-        console.log(`デバイス ${currentDevices.length} 件読み込み完了`);
+        renderDevicesPagination();
+        console.log(`デバイス ${currentDevices.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
     } catch (error) {
         console.error('デバイス読み込みエラー詳細:', error);
         console.error('エラーレスポンス:', error.response?.data);
@@ -1435,17 +1464,102 @@ async function startOpenSMILEAggregator() {
 /**
  * 通知一覧を読み込み
  */
-async function loadNotifications() {
+async function loadNotifications(page = 1) {
     try {
-        const response = await axios.get('/api/notifications');
-        currentNotifications = response.data;
+        const response = await axios.get(`/api/notifications?page=${page}&per_page=${notificationPagination.per_page}`);
+        const data = response.data;
+        
+        currentNotifications = data.items;
+        notificationPagination = {
+            page: data.page,
+            per_page: data.per_page,
+            total: data.total,
+            total_pages: data.total_pages,
+            has_next: data.has_next,
+            has_prev: data.has_prev
+        };
+        
         renderNotificationsList();
+        renderNotificationsPagination();
         updateNotificationStats();
-        console.log('通知一覧を読み込みました:', currentNotifications.length, '件');
+        console.log(`通知一覧 ${currentNotifications.length}/${data.total} 件読み込み完了 (ページ ${page}/${data.total_pages})`);
     } catch (error) {
         console.error('通知一覧の読み込みエラー:', error);
         showNotification('通知一覧の取得に失敗しました', 'error');
     }
+}
+
+// =============================================================================
+// ページネーション関数
+// =============================================================================
+
+function renderUsersPagination() {
+    const container = document.getElementById('users-pagination');
+    if (!container) return;
+    
+    const pagination = userPagination;
+    container.innerHTML = createPaginationHTML(pagination, 'loadUsers');
+}
+
+function renderDevicesPagination() {
+    const container = document.getElementById('devices-pagination');
+    if (!container) return;
+    
+    const pagination = devicePagination;
+    container.innerHTML = createPaginationHTML(pagination, 'loadDevices');
+}
+
+function renderNotificationsPagination() {
+    const container = document.getElementById('notifications-pagination');
+    if (!container) return;
+    
+    const pagination = notificationPagination;
+    container.innerHTML = createPaginationHTML(pagination, 'loadNotifications');
+}
+
+function createPaginationHTML(pagination, loadFunction) {
+    if (pagination.total_pages <= 1) return '';
+    
+    let html = `
+        <div class="flex items-center justify-between mt-4">
+            <div class="text-sm text-gray-700">
+                ${pagination.per_page * (pagination.page - 1) + 1} - ${Math.min(pagination.per_page * pagination.page, pagination.total)} 件 / 全 ${pagination.total} 件
+            </div>
+            <div class="flex space-x-2">
+    `;
+    
+    // 前へボタン
+    if (pagination.has_prev) {
+        html += `<button onclick="${loadFunction}(${pagination.page - 1})" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">前へ</button>`;
+    } else {
+        html += `<button disabled class="px-3 py-1 text-sm bg-gray-300 text-gray-500 rounded cursor-not-allowed">前へ</button>`;
+    }
+    
+    // ページ番号
+    const startPage = Math.max(1, pagination.page - 2);
+    const endPage = Math.min(pagination.total_pages, pagination.page + 2);
+    
+    for (let page = startPage; page <= endPage; page++) {
+        if (page === pagination.page) {
+            html += `<button class="px-3 py-1 text-sm bg-blue-600 text-white rounded">${page}</button>`;
+        } else {
+            html += `<button onclick="${loadFunction}(${page})" class="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300">${page}</button>`;
+        }
+    }
+    
+    // 次へボタン
+    if (pagination.has_next) {
+        html += `<button onclick="${loadFunction}(${pagination.page + 1})" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">次へ</button>`;
+    } else {
+        html += `<button disabled class="px-3 py-1 text-sm bg-gray-300 text-gray-500 rounded cursor-not-allowed">次へ</button>`;
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    return html;
 }
 
 /**

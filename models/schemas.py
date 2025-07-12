@@ -208,3 +208,39 @@ class NotificationBroadcastResponse(BaseModel):
     failed_count: int
     message: str
     timestamp: datetime
+
+
+# =============================================================================
+# ページネーション関連モデル
+# =============================================================================
+
+class PaginationParams(BaseModel):
+    """ページネーションパラメータ"""
+    page: int = Field(default=1, ge=1, description="ページ番号（1から開始）")
+    per_page: int = Field(default=20, ge=1, le=100, description="1ページあたりのアイテム数（最大100）")
+
+
+class PaginatedResponse(BaseModel):
+    """ページネーション付きレスポンス"""
+    items: List[Any] = Field(..., description="アイテムリスト")
+    total: int = Field(..., description="総アイテム数")
+    page: int = Field(..., description="現在のページ番号")
+    per_page: int = Field(..., description="1ページあたりのアイテム数")
+    total_pages: int = Field(..., description="総ページ数")
+    has_next: bool = Field(..., description="次のページがあるか")
+    has_prev: bool = Field(..., description="前のページがあるか")
+
+
+class PaginatedUsersResponse(PaginatedResponse):
+    """ページネーション付きユーザー一覧レスポンス"""
+    items: List[User]
+
+
+class PaginatedDevicesResponse(PaginatedResponse):
+    """ページネーション付きデバイス一覧レスポンス"""
+    items: List[Device]
+
+
+class PaginatedNotificationsResponse(PaginatedResponse):
+    """ページネーション付き通知一覧レスポンス"""
+    items: List[Notification]
