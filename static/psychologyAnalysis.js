@@ -20,7 +20,7 @@ function initializeAllDates() {
     const dateInputs = [
         'whisper-date', 'prompt-date', 'chatgpt-date',
         'sed-date', 'sed-aggregator-date', 'opensmile-date', 'aggregator-date',
-        'batch-psychology-date'
+        'batch-psychology-date', 'batch-behavior-date'
     ];
     const today = new Date().toISOString().split('T')[0];
     dateInputs.forEach(id => {
@@ -31,18 +31,29 @@ function initializeAllDates() {
 
 function initializeBatchProcessingDefaults() {
     // バッチ処理のデフォルト値を設定
-    const deviceIdInput = document.getElementById('batch-psychology-device-id');
-    const dateInput = document.getElementById('batch-psychology-date');
+    const defaultDeviceId = 'd067d407-cf73-4174-a9c1-d91fb60d64d0';
+    const today = new Date().toISOString().split('T')[0];
     
-    // デバイスIDのデフォルト値（HTMLでも設定済みだが念のため）
-    if (deviceIdInput && !deviceIdInput.value.trim()) {
-        deviceIdInput.value = 'd067d407-cf73-4174-a9c1-d91fb60d64d0';
+    // 心理グラフバッチ処理
+    const psychologyDeviceInput = document.getElementById('batch-psychology-device-id');
+    const psychologyDateInput = document.getElementById('batch-psychology-date');
+    
+    if (psychologyDeviceInput && !psychologyDeviceInput.value.trim()) {
+        psychologyDeviceInput.value = defaultDeviceId;
+    }
+    if (psychologyDateInput && !psychologyDateInput.value) {
+        psychologyDateInput.value = today;
     }
     
-    // 日付のデフォルト値（本日）
-    if (dateInput && !dateInput.value) {
-        const today = new Date().toISOString().split('T')[0];
-        dateInput.value = today;
+    // 行動グラフバッチ処理
+    const behaviorDeviceInput = document.getElementById('batch-behavior-device-id');
+    const behaviorDateInput = document.getElementById('batch-behavior-date');
+    
+    if (behaviorDeviceInput && !behaviorDeviceInput.value.trim()) {
+        behaviorDeviceInput.value = defaultDeviceId;
+    }
+    if (behaviorDateInput && !behaviorDateInput.value) {
+        behaviorDateInput.value = today;
     }
     
     console.log('バッチ処理デフォルト値設定完了');
@@ -95,6 +106,12 @@ function setupPsychologyEventListeners() {
     const startPsychologyBatchBtn = document.getElementById('start-psychology-batch-btn');
     if (startPsychologyBatchBtn) {
         startPsychologyBatchBtn.addEventListener('click', startPsychologyBatch);
+    }
+    
+    // 行動グラフバッチ処理機能のイベントリスナー
+    const startBehaviorBatchBtn = document.getElementById('start-behavior-batch-btn');
+    if (startBehaviorBatchBtn) {
+        startBehaviorBatchBtn.addEventListener('click', startBehaviorBatch);
     }
 }
 
@@ -351,6 +368,131 @@ async function startPsychologyBatch() {
             logWithDelay('✅ バッチ処理が正常に完了しました。', false, false, 600);
             setTimeout(() => {
                 showNotification('心理グラフ作成バッチが完了しました。', 'success');
+            }, logDelay + 500);
+        } else {
+            throw new Error(response.data.message || 'バッチ処理中に不明なエラーが発生しました。');
+        }
+
+    } catch (error) {
+        console.error('バッチ処理エラー:', error);
+        const errorMessage = error.response?.data?.detail || error.message || 'バッチ処理に失敗しました。';
+        logWithDelay(`❌ 重大なエラー: ${errorMessage}`, true, false, 200);
+        setTimeout(() => {
+            showNotification(errorMessage, 'error');
+        }, logDelay + 300);
+    } finally {
+        setTimeout(() => {
+            button.disabled = false;
+            button.textContent = '🚀 バッチ処理開始';
+        }, logDelay + 800);
+    }
+}
+
+// =============================================================================
+// 行動グラフバッチ処理
+// =============================================================================
+
+async function startBehaviorBatch() {
+    const deviceId = document.getElementById('batch-behavior-device-id').value.trim();
+    const date = document.getElementById('batch-behavior-date').value;
+    const button = document.getElementById('start-behavior-batch-btn');
+    const logContainer = document.getElementById('batch-behavior-log-container');
+    const logElement = document.getElementById('batch-behavior-log');
+
+    if (!deviceId || !date) {
+        showNotification('デバイスIDと日付を入力してください', 'error');
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = '🔄 実行中...';
+    logContainer.classList.remove('hidden');
+    logElement.innerHTML = '';
+
+    // 進行状況表示のためのカウンター
+    let logDelay = 0;
+    
+    const logWithDelay = (message, isError = false, isWarning = false, delayMs = 400) => {
+        setTimeout(() => {
+            const timestamp = new Date().toLocaleTimeString();
+            let colorClass = 'text-green-400';
+            if (isError) {
+                colorClass = 'text-red-400';
+            } else if (isWarning) {
+                colorClass = 'text-yellow-400';
+            }
+            logElement.innerHTML += `<div class="flex"><div class="w-20 text-gray-500">${timestamp}</div><div class="flex-1 ${colorClass}">${message}</div></div>`;
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }, logDelay);
+        logDelay += delayMs;
+    };
+
+    try {
+        // 処理開始前のログを段階的に表示
+        logWithDelay('🚶 行動グラフ作成バッチを開始します...', false, false, 100);
+        logWithDelay('📋 実行予定: ①SED音響イベント検出 → ②SED Aggregator', false, false, 300);
+        logWithDelay('🔍 APIサーバーの状態を確認中...', false, false, 500);
+        logWithDelay('🔄 バッチ処理リクエストを送信中...', false, false, 600);
+        
+        // APIリクエストを実際の遅延後に実行
+        const response = await new Promise((resolve, reject) => {
+            setTimeout(async () => {
+                try {
+                    const result = await axios.post('/api/batch/create-behavior-graph', {
+                        device_id: deviceId,
+                        date: date
+                    });
+                    resolve(result);
+                } catch (error) {
+                    reject(error);
+                }
+            }, logDelay);
+        });
+
+        // 結果を段階的に表示（時間差を大きくして）
+        const results = response.data.results;
+        logDelay = 0; // 遅延をリセット
+        
+        for (let i = 0; i < results.length; i++) {
+            const result = results[i];
+            const isError = !result.success;
+            const isWarning = result.step.includes('確認');
+            
+            // より詳細なステップ表示とリアルタイム感の演出
+            if (result.step === '初期化') {
+                logWithDelay(`🚶 ${result.message}`, isError, false, 200);
+            } else if (result.step.includes('サーバー確認')) {
+                logWithDelay(`${result.message}`, isError, isWarning, 300);
+            } else if (result.step.includes('SED音響イベント検出')) {
+                logWithDelay(`🎵 ${result.step}: 音響イベント検出を開始中...`, false, false, 400);
+                logWithDelay(`🎵 ${result.step}: ${result.message}`, isError, false, 600);
+                if (result.success && result.data) {
+                    const summary = result.data.summary || {};
+                    const processedCount = summary.audio_fetched || result.data.processed_count || 0;
+                    const savedCount = summary.supabase_saved || 0;
+                    logWithDelay(`   📊 処理結果: ${processedCount}件のファイルを処理、${savedCount}件を保存`, false, false, 300);
+                }
+            } else if (result.step.includes('SED Aggregator')) {
+                logWithDelay(`📊 ${result.step}: 行動グラフデータ生成を開始中...`, false, false, 400);
+                logWithDelay(`📊 ${result.step}: ${result.message}`, isError, false, 500);
+                if (result.success && result.data) {
+                    if (result.data.task_id) {
+                        logWithDelay(`   📈 非同期処理開始: タスクID ${result.data.task_id}`, false, false, 300);
+                    } else {
+                        logWithDelay(`   📈 集約結果: ${result.data.aggregated_count || 0}件のイベントを集約`, false, false, 300);
+                    }
+                }
+            } else if (result.step === '完了') {
+                logWithDelay(`🎉 ${result.message}`, isError, false, 500);
+            } else {
+                logWithDelay(`⚙️ ${result.step}: ${result.message}`, isError, false, 300);
+            }
+        }
+
+        if (response.data.success) {
+            logWithDelay('✅ バッチ処理が正常に完了しました。', false, false, 600);
+            setTimeout(() => {
+                showNotification('行動グラフ作成バッチが完了しました。', 'success');
             }, logDelay + 500);
         } else {
             throw new Error(response.data.message || 'バッチ処理中に不明なエラーが発生しました。');
@@ -686,14 +828,20 @@ async function startSEDProcessing() {
     statusDiv.textContent = 'SED音響イベント検出処理を開始しています...';
     
     try {
-        const response = await axios.post('http://localhost:8003/process-audio', {
+        const response = await axios.post('http://localhost:8004/fetch-and-process', {
             device_id: deviceId,
-            date: date
+            date: date,
+            threshold: parseFloat(document.getElementById('sed-threshold').value) || 0.2
         });
         
         const data = response.data;
-        statusDiv.textContent = `SED処理完了: ${data.processed_count}件のファイルを処理しました`;
-        showNotification(`SED処理が完了しました（${data.processed_count}件処理）`, 'success');
+        console.log('SED API Response:', data); // デバッグ用ログ
+        
+        // レスポンスの構造に応じて適切なフィールドを参照
+        const processedCount = data.summary?.audio_fetched || data.processed_count || 0;
+        const savedCount = data.summary?.supabase_saved || 0;
+        statusDiv.textContent = `SED処理完了: ${processedCount}件のファイルを処理、${savedCount}件を保存しました`;
+        showNotification(`SED処理が完了しました（${processedCount}件処理、${savedCount}件保存）`, 'success');
         
     } catch (error) {
         console.error('SED処理エラー:', error);
@@ -726,14 +874,24 @@ async function startSEDAggregatorProcessing() {
     statusDiv.textContent = 'SED Aggregator処理を開始しています...';
     
     try {
-        const response = await axios.post('http://localhost:8003/aggregate-events', {
+        const response = await axios.post('http://localhost:8010/analysis/sed', {
             device_id: deviceId,
             date: date
         });
         
         const data = response.data;
-        statusDiv.textContent = `SED Aggregator処理完了: ${data.aggregated_count}件のイベントを集約しました`;
-        showNotification(`SED Aggregator処理が完了しました（${data.aggregated_count}件集約）`, 'success');
+        console.log('SED Aggregator API Response:', data); // デバッグ用ログ
+        
+        // レスポンスの構造に応じて適切なフィールドを参照
+        // SED Aggregatorは非同期処理なので、タスクIDが返される
+        if (data.task_id) {
+            statusDiv.textContent = `SED Aggregator処理を開始しました (タスクID: ${data.task_id})`;
+            showNotification(`SED Aggregator処理を開始しました`, 'info');
+        } else {
+            const aggregatedCount = data.aggregated_count || data.aggregatedCount || data.count || 0;
+            statusDiv.textContent = `SED Aggregator処理完了: ${aggregatedCount}件のイベントを集約しました`;
+            showNotification(`SED Aggregator処理が完了しました（${aggregatedCount}件集約）`, 'success');
+        }
         
     } catch (error) {
         console.error('SED Aggregator処理エラー:', error);

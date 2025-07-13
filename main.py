@@ -663,15 +663,24 @@ async def call_api(session, step_name, url, method='post', json_data=None, param
     try:
         print(f"🔗 APIコール開始: {step_name} -> {url}")
         
+        # 相対パスの場合、フルURLに変換
+        if url.startswith('/'):
+            full_url = f"http://localhost:9000{url}"
+        else:
+            full_url = url
+            
         # APIサーバーのヘルスチェック（失敗しても処理は続行）
-        base_url = url
-        health_check = await check_api_health(session, step_name, base_url)
+        # 相対パスの場合はヘルスチェックをスキップ
+        health_check = None
+        if not url.startswith('/'):
+            base_url = url
+            health_check = await check_api_health(session, step_name, base_url)
         
         print(f"🚀 {step_name}API処理開始...")
         if method == 'post':
-            response = await session.post(url, json=json_data, timeout=300.0)
+            response = await session.post(full_url, json=json_data, timeout=300.0)
         else:
-            response = await session.get(url, params=params, timeout=300.0)
+            response = await session.get(full_url, params=params, timeout=300.0)
         
         response.raise_for_status() # HTTPエラーがあれば例外を発生
         print(f"✅ {step_name}API処理完了")
@@ -754,6 +763,124 @@ async def create_psychology_graph_batch(request: Request):
     }
     results.append(completion_log)
 
+    return {"success": True, "message": "✅ バッチ処理が正常に完了しました。", "results": results}
+
+
+@app.post("/api/batch/create-behavior-graph")
+async def create_behavior_graph_batch(request: Request):
+    """
+    行動グラフ作成のバッチ処理
+    SED音響イベント検出 → SED Aggregatorを順番に実行
+    """
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+    
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+    
+    results = []
+    overall_success = True
+    
+    # 初期化
+    results.append({
+        "step": "初期化",
+        "message": "行動グラフ作成バッチ処理を開始します...",
+        "success": True
+    })
+    
+    # API定義（行動グラフ関連）
+    BEHAVIOR_API_ENDPOINTS = {
+        "sed": "http://localhost:8004/fetch-and-process",
+        "sed_aggregator": "http://localhost:8010/analysis/sed"
+    }
+    
+    async with httpx.AsyncClient() as session:
+        # 1. APIヘルスチェック（相対パスの場合はスキップ）
+        for api_name, api_url in BEHAVIOR_API_ENDPOINTS.items():
+            if api_url.startswith('/'):
+                # 相対パスの場合はヘルスチェックをスキップ
+                results.append({
+                    "step": f"APIサーバー確認: {api_name}",
+                    "message": f"✅ {api_name} API は管理画面経由で呼び出されます",
+                    "success": True
+                })
+            else:
+                # 絶対URLの場合のみヘルスチェック
+                try:
+                    api_base_url = api_url.rsplit('/', 1)[0]
+                    health_check_url = f"{api_base_url}/health"
+                    port = api_base_url.split(':')[-1]
+                    
+                    health_response = await session.get(health_check_url, timeout=2.0)
+                    if health_response.status_code == 200:
+                        results.append({
+                            "step": f"APIサーバー確認: {api_name}",
+                            "message": f"✅ {api_name} API (ポート{port}) は正常に動作しています",
+                            "success": True
+                        })
+                    else:
+                        results.append({
+                            "step": f"APIサーバー確認: {api_name}",
+                            "message": f"⚠️ {api_name} API (ポート{port}) のヘルスチェックが失敗しました (status: {health_response.status_code})",
+                            "success": False
+                        })
+                except:
+                    # ヘルスチェックエンドポイントがない場合は続行
+                    port = api_url.split(':')[2].split('/')[0]
+                    results.append({
+                        "step": f"APIサーバー確認: {api_name}",
+                        "message": f"⚠️ {api_name} API (ポート{port}) のヘルスチェックができませんでした。処理を続行します。",
+                        "success": True
+                    })
+        
+        # 2. SED音響イベント検出
+        sed_result = await call_api(
+            session, 
+            "SED音響イベント検出", 
+            BEHAVIOR_API_ENDPOINTS["sed"], 
+            json_data={
+                "device_id": device_id,
+                "date": date
+            }
+        )
+        results.append(sed_result)
+        if not sed_result["success"]:
+            overall_success = False
+            results.append({
+                "step": "エラー",
+                "message": "SED音響イベント検出でエラーが発生したため、バッチ処理を中止します。",
+                "success": False
+            })
+            return {"success": False, "message": "❌ バッチ処理が失敗しました。", "results": results}
+        
+        # 3. SED Aggregator - 行動グラフデータ生成
+        aggregator_result = await call_api(
+            session, 
+            "SED Aggregator", 
+            BEHAVIOR_API_ENDPOINTS["sed_aggregator"], 
+            json_data={
+                "device_id": device_id,
+                "date": date
+            }
+        )
+        results.append(aggregator_result)
+        if not aggregator_result["success"]:
+            overall_success = False
+            results.append({
+                "step": "エラー",
+                "message": "SED Aggregatorでエラーが発生しましたが、SEDの処理は完了しています。",
+                "success": False
+            })
+            return {"success": False, "message": "❌ バッチ処理が部分的に失敗しました。", "results": results}
+    
+    # 完了
+    results.append({
+        "step": "完了",
+        "message": "🎉 行動グラフ作成バッチ処理が完了しました！",
+        "success": True
+    })
+    
     return {"success": True, "message": "✅ バッチ処理が正常に完了しました。", "results": results}
 
 
