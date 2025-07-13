@@ -924,7 +924,7 @@ async function startOpenSMILEProcessing() {
     statusDiv.textContent = 'OpenSMILE特徴量抽出処理を開始しています...';
     
     try {
-        const response = await axios.post('http://localhost:8004/extract-features', {
+        const response = await axios.post('http://localhost:8011/process/vault-data', {
             device_id: deviceId,
             date: date
         });
@@ -964,7 +964,7 @@ async function startOpenSMILEAggregator() {
     statusDiv.textContent = 'OpenSMILE Aggregator処理を開始しています...';
     
     try {
-        const response = await axios.post('http://localhost:8004/aggregate-features', {
+        const response = await axios.post('http://localhost:8011/aggregate-features', {
             device_id: deviceId,
             user_session: userSession
         });
