@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  admin:
+    build: .
+    container_name: watchme-admin
+    ports:
+      - "9000:9000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - watchme-network
+
+networks:
+  watchme-network:
+    driver: bridge

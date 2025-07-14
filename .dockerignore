@@ -1,0 +1,17 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+.env
+.git/
+.gitignore
+*.log
+admin_server.log
+*.md
+.DS_Store
+Thumbs.db

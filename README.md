@@ -3,6 +3,22 @@
 **WatchMe システムの管理画面**  
 FastAPIとSupabaseを使用したデバイス・ユーザー管理システムです。
 
+## 🌐 本番環境アクセス
+
+**本番URL**: https://admin.hey-watch.me
+
+## 🚨 重要: 本番環境移行中について
+
+**現在の状況（2025年7月14日）:**
+- ✅ 管理画面の基本機能（ユーザー管理・デバイス管理・通知管理）は本番環境で動作中
+- ⚠️ **API連携機能は移行作業中**: 各種分析API（Whisper、ChatGPT等）への接続は段階的に本番用に修正予定
+- 🔄 現在のAPI呼び出しはlocalhost参照のため、ブラウザからは動作しません
+
+**移行予定:**
+1. プロキシ設定によるAPI接続の修正
+2. 各APIサーバーの本番用エンドポイント設定
+3. 段階的な機能テスト
+
 ## ⚠️ 重要: Python実行環境について
 
 ### 1. Python コマンドについて
@@ -21,6 +37,87 @@ FastAPIとSupabaseを使用したデバイス・ユーザー管理システム�
 - シンプルで確実な起動を重視
 - 依存関係管理をグローバル環境で統一
 - 起動時の環境問題を最小化
+
+## 🐳 本番環境デプロイ方法
+
+### 📋 デプロイ手順
+
+1. **EC2サーバーへのアップロード**
+```bash
+# ローカルでtarball作成
+cd /path/to/watchme
+tar --exclude='admin/venv' --exclude='admin/__pycache__' --exclude='admin/*.log' --exclude='admin/.env' -czf admin.tar.gz admin/
+
+# EC2にアップロード
+scp -i ~/watchme-key.pem admin.tar.gz ubuntu@3.24.16.82:~/
+scp -i ~/watchme-key.pem admin/.env ubuntu@3.24.16.82:~/admin.env
+
+# EC2で展開
+ssh -i ~/watchme-key.pem ubuntu@3.24.16.82
+tar -xzf admin.tar.gz
+mv admin.env admin/.env
+```
+
+2. **Dockerコンテナのビルドと起動**
+```bash
+cd ~/admin
+docker-compose build
+docker-compose up -d
+```
+
+### 🔧 systemd永続化設定
+
+**本番環境では自動起動するようsystemdに登録済みです。**
+
+```bash
+# サービスの状態確認
+sudo systemctl status watchme-admin
+
+# サービスの停止
+sudo systemctl stop watchme-admin
+
+# サービスの起動
+sudo systemctl start watchme-admin
+
+# サービスの再起動
+sudo systemctl restart watchme-admin
+
+# ログの確認
+sudo journalctl -u watchme-admin -f
+```
+
+### 🌐 HTTPS設定
+
+**SSL証明書**: Let's Encryptで自動取得済み
+- **証明書パス**: `/etc/letsencrypt/live/admin.hey-watch.me/`
+- **自動更新**: certbotにより自動更新設定済み
+
+**Nginx設定**:
+```bash
+# 設定ファイル確認
+sudo cat /etc/nginx/sites-enabled/admin.hey-watch.me
+
+# Nginx再起動
+sudo systemctl reload nginx
+```
+
+### 🔄 本番環境運用コマンド
+
+```bash
+# コンテナ状態確認
+docker ps | grep watchme-admin
+
+# ログ確認
+docker logs watchme-admin --tail 50
+
+# コンテナの直接操作
+docker exec -it watchme-admin bash
+
+# 設定変更後の再起動
+sudo systemctl restart watchme-admin
+```
+
+## 🛠️ ローカル開発環境
 
 ### 3. 必要な環境設定
 ```bash
@@ -765,7 +862,29 @@ NODE_ENV=development
 
 ---
 
-## 🔧 最新のアップデート（2025-07-08）
+## 🔧 最新のアップデート
+
+### ✨ 新機能・改善点（2025-07-14）
+- **🌐 本番環境デプロイ完了**: EC2上でDocker化による本番環境構築
+  - **HTTPS対応**: admin.hey-watch.me でSSL/TLS暗号化通信
+  - **自動起動設定**: systemdによる永続化と自動起動設定
+  - **Let's Encrypt**: SSL証明書の自動取得・更新設定
+  - **Nginx**: リバースプロキシによる安全なアクセス制御
+- **🐳 Docker化**: コンテナベースの安定した実行環境
+  - **docker-compose**: シンプルな起動・停止管理
+  - **systemd統合**: サーバー再起動時の自動復旧
+  - **ログ管理**: systemd journalによる集中ログ管理
+- **📋 運用ドキュメント**: 本番環境の運用手順を完全整備
+  - **デプロイ手順**: 段階的なデプロイプロセスの文書化
+  - **運用コマンド**: 日常運用に必要なコマンド集
+  - **トラブルシューティング**: 問題発生時の対応手順
+
+### ⚠️ 移行作業中の注意事項
+- **API接続**: 各種分析APIとの接続は段階的に本番用に修正予定
+- **localhost参照**: 現在のAPI呼び出しは開発環境向けのため、ブラウザからは動作しません
+- **機能制限**: 基本的な管理機能は動作するが、分析機能は一時的に制限中
+
+## 🔧 過去のアップデート（2025-07-08）
 
 ### ✨ 新機能・改善点（2025-07-12）
 - **⚡ バッチ処理機能完全実装**: 心理グラフ作成の3ステップを自動化した一括処理機能を追加
