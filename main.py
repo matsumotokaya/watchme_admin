@@ -637,7 +637,7 @@ import asyncio
 
 # APIエンドポイントの定義
 API_ENDPOINTS = {
-    "whisper": "http://localhost:8001/fetch-and-transcribe",
+    "whisper": "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe",
     "prompt_gen": "http://localhost:8009/generate-mood-prompt-supabase",
     "chatgpt": "http://localhost:8002/analyze-vibegraph-supabase"
 }
@@ -716,7 +716,7 @@ async def create_psychology_graph_batch(request: Request):
 
     async with httpx.AsyncClient() as session:
         # ステップ1: Whisperサーバー確認と処理
-        whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data={"device_id": device_id, "date": date})
+        whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data={"device_id": device_id, "date": date, "model": "base"})
         
         # ヘルスチェック結果があれば追加
         if "health_check" in whisper_result:

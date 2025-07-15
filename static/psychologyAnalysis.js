@@ -520,7 +520,7 @@ async function startBehaviorBatch() {
 async function startWhisperProcessing() {
     const deviceId = document.getElementById('whisper-device-id').value.trim();
     const date = document.getElementById('whisper-date').value;
-    const model = document.getElementById('whisper-model').value;
+    const model = 'base'; // サーバーリソースの制約により、baseモデルのみサポート
     const button = document.getElementById('start-whisper-btn');
     const statusDiv = document.getElementById('whisper-status');
     const resultsDiv = document.getElementById('whisper-results');
@@ -544,40 +544,81 @@ async function startWhisperProcessing() {
     statusDiv.textContent = 'Whisper音声文字起こし処理を開始しています...';
     if (resultsDiv) resultsDiv.classList.add('hidden');
     
+    statusDiv.textContent = 'Whisper音声文字起こし処理を実行中...';
+    
     try {
-        const response = await axios.post('http://localhost:8001/fetch-and-transcribe', {
+        const startTime = new Date();
+        
+        // 正しいエンドポイントを使用して直接APIを呼び出す
+        const response = await axios.post('https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe', {
             device_id: deviceId,
             date: date,
-            model: model
+            model: model  // baseモデル固定
+        }, {
+            timeout: 600000  // 10分のタイムアウト
         });
         
-        const data = response.data;
-        statusDiv.textContent = `処理完了: ${data.processed_count}件のファイルを処理しました`;
+        const result = response.data;
+        const endTime = new Date();
+        const processingTime = Math.round((endTime - startTime) / 1000);
         
-        if (resultsDiv && resultsContent) {
-            resultsContent.innerHTML = `
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <h4 class="font-medium text-green-900 mb-2">✅ Whisper処理結果</h4>
-                    <div class="text-sm text-green-700 space-y-1">
-                        <div>処理ファイル数: <span class="font-medium">${data.processed_count}件</span></div>
-                        <div>成功: <span class="font-medium">${data.success_count}件</span></div>
-                        <div>エラー: <span class="font-medium">${data.error_count}件</span></div>
-                        <div>開始時刻: <span class="font-medium">${new Date(data.start_time).toLocaleString('ja-JP')}</span></div>
-                        <div>終了時刻: <span class="font-medium">${new Date(data.end_time).toLocaleString('ja-JP')}</span></div>
-                        <div>処理時間: <span class="font-medium">${Math.round(data.duration_seconds)}秒</span></div>
+        // 処理結果の表示
+        if (result.status === 'success') {
+            statusDiv.textContent = `処理完了: ${result.processed ? result.processed.length : 0}件のファイルを処理しました`;
+            
+            if (resultsDiv && resultsContent) {
+                resultsContent.innerHTML = `
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <h4 class="font-medium text-green-900 mb-2">✅ Whisper処理結果</h4>
+                        <div class="text-sm text-green-700 space-y-1">
+                            <div>処理ファイル数: <span class="font-medium">${result.summary.total_time_blocks}件</span></div>
+                            <div>音声取得: <span class="font-medium">${result.summary.audio_fetched}件</span></div>
+                            <div>Supabase保存: <span class="font-medium">${result.summary.supabase_saved}件</span></div>
+                            <div>スキップ: <span class="font-medium">${result.summary.skipped_existing}件</span></div>
+                            <div>エラー: <span class="font-medium">${result.summary.errors}件</span></div>
+                            <div>開始時刻: <span class="font-medium">${startTime.toLocaleString('ja-JP')}</span></div>
+                            <div>終了時刻: <span class="font-medium">${endTime.toLocaleString('ja-JP')}</span></div>
+                            <div>処理時間: <span class="font-medium">${processingTime}秒</span></div>
+                        </div>
+                        ${result.errors && result.errors.length > 0 ? `
+                            <div class="mt-3 text-sm text-red-700">
+                                <h5 class="font-medium">エラー詳細:</h5>
+                                <ul class="list-disc list-inside">
+                                    ${result.errors.map(err => `<li>${err}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
                     </div>
-                </div>
-            `;
-            resultsDiv.classList.remove('hidden');
+                `;
+                resultsDiv.classList.remove('hidden');
+            }
+            
+            showNotification('Whisper処理が完了しました', 'success');
+        } else {
+            throw new Error(result.message || 'Whisper処理が失敗しました');
         }
-        
-        showNotification(`Whisper処理が完了しました（${data.success_count}件成功）`, 'success');
         
     } catch (error) {
         console.error('Whisper処理エラー:', error);
-        const errorMessage = error.response?.data?.detail || error.message || 'Whisper処理に失敗しました';
-        statusDiv.textContent = `エラー: ${errorMessage}`;
-        showNotification(errorMessage, 'error');
+        
+        let errorMessage;
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+            errorMessage = 'タイムアウトしました。処理はバックグラウンドで継続されている可能性があります。';
+            statusDiv.innerHTML = `
+                <div class="text-yellow-600">
+                    <span>⚠️ ${errorMessage}</span>
+                    <div class="text-sm mt-2">
+                        <p>※ 大量のデータ処理には時間がかかります。</p>
+                        <p>※ Supabaseで結果を確認してください。</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            errorMessage = error.response?.data?.detail || error.message || 'Whisper処理に失敗しました';
+            statusDiv.textContent = `エラー: ${errorMessage}`;
+        }
+        
+        showNotification(errorMessage, error.code === 'ECONNABORTED' ? 'warning' : 'error');
         
         if (resultsDiv && resultsContent) {
             resultsContent.innerHTML = `
