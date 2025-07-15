@@ -638,7 +638,7 @@ import asyncio
 # APIエンドポイントの定義
 API_ENDPOINTS = {
     "whisper": "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe",
-    "prompt_gen": "http://localhost:8009/generate-mood-prompt-supabase",
+    "prompt_gen": "https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase",
     "chatgpt": "http://localhost:8002/analyze-vibegraph-supabase"
 }
 

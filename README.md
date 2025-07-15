@@ -40,29 +40,117 @@ FastAPIとSupabaseを使用したデバイス・ユーザー管理システム�
 
 ## 🐳 本番環境デプロイ方法
 
-### 📋 デプロイ手順
+### 🔑 必要な情報
+- **EC2サーバーIP**: `3.24.16.82`
+- **SSHユーザー**: `ubuntu`
+- **SSHキーファイル**: `~/watchme-key.pem`（ローカルPCに必要）
 
-1. **EC2サーバーへのアップロード**
+### 📋 デプロイ手順（ステップバイステップ）
+
+#### 1️⃣ ローカルPCでの準備
 ```bash
-# ローカルでtarball作成
+# プロジェクトディレクトリに移動
 cd /path/to/watchme
+
+# デプロイ用のtarballを作成（不要なファイルは除外）
 tar --exclude='admin/venv' --exclude='admin/__pycache__' --exclude='admin/*.log' --exclude='admin/.env' -czf admin.tar.gz admin/
-
-# EC2にアップロード
-scp -i ~/watchme-key.pem admin.tar.gz ubuntu@3.24.16.82:~/
-scp -i ~/watchme-key.pem admin/.env ubuntu@3.24.16.82:~/admin.env
-
-# EC2で展開
-ssh -i ~/watchme-key.pem ubuntu@3.24.16.82
-tar -xzf admin.tar.gz
-mv admin.env admin/.env
 ```
 
-2. **Dockerコンテナのビルドと起動**
+#### 2️⃣ EC2サーバーへファイルをアップロード
 ```bash
+# アプリケーションファイルをアップロード
+scp -i ~/watchme-key.pem admin.tar.gz ubuntu@3.24.16.82:~/
+
+# 環境設定ファイルを別途アップロード（重要）
+scp -i ~/watchme-key.pem admin/.env ubuntu@3.24.16.82:~/admin.env
+```
+
+#### 3️⃣ EC2サーバーにSSH接続
+```bash
+# EC2サーバーに接続
+ssh -i ~/watchme-key.pem ubuntu@3.24.16.82
+```
+
+#### 4️⃣ EC2サーバー上での作業
+```bash
+# アップロードしたファイルを展開
+tar -xzf admin.tar.gz
+
+# 環境設定ファイルを正しい場所に配置
+mv admin.env admin/.env
+
+# adminディレクトリに移動
 cd ~/admin
+```
+
+#### 5️⃣ Dockerでアプリケーションを更新・再起動
+```bash
+# 方法A: systemdサービスを使う（推奨）
+sudo systemctl restart watchme-admin
+
+# 方法B: Docker Composeを直接使う場合
 docker-compose build
+docker-compose down
 docker-compose up -d
+```
+
+### ⚠️ デプロイが反映されない場合の対処法
+
+**症状**: ファイルを更新してデプロイしたのに、ブラウザで古いバージョンが表示される
+
+**原因と対処法**:
+
+1. **Dockerビルドキャッシュが原因の場合**（最も多い）
+   ```bash
+   # キャッシュを無視して強制的に再ビルド
+   cd ~/admin
+   sudo docker-compose build --no-cache
+   sudo docker-compose down
+   sudo docker-compose up -d
+   ```
+
+2. **ブラウザキャッシュが原因の場合**
+   - 強制リロード: `Cmd + Shift + R`（Mac）/ `Ctrl + Shift + R`（Windows）
+   - 完全なキャッシュクリア: ブラウザ設定 → 閲覧履歴データの削除 → キャッシュされた画像とファイル
+
+3. **確認手順**
+   ```bash
+   # ファイルが正しくアップロードされているか確認
+   cat ~/admin/templates/index.html | grep "変更した部分"
+   
+   # コンテナが正常に起動しているか確認
+   sudo docker ps | grep watchme-admin
+   
+   # コンテナのログを確認
+   sudo docker logs watchme-admin --tail 50
+   ```
+
+**💡 ヒント**: Dockerfileは既に最適化されており、通常は`requirements.txt`が変更されない限りビルドは高速です。ただし、長期間更新していない場合はキャッシュが失効している可能性があるため、`--no-cache`オプションが必要になることがあります。
+
+### ✅ デプロイ確認
+```bash
+# サービスの状態を確認
+sudo systemctl status watchme-admin
+
+# ログを確認（エラーがないか確認）
+sudo journalctl -u watchme-admin -f --tail 50
+```
+
+### 🚨 トラブルシューティング
+```bash
+# SSH接続できない場合
+# 1. キーファイルの権限を確認
+chmod 600 ~/watchme-key.pem
+
+# 2. 正しいIPアドレスか確認
+ping 3.24.16.82
+
+# サービスが起動しない場合
+# 1. Dockerコンテナの状態を確認
+docker ps -a
+
+# 2. エラーログを確認
+docker logs watchme-admin
 ```
 
 ### 🔧 systemd永続化設定
@@ -119,7 +207,7 @@ sudo systemctl restart watchme-admin
 
 ## 🛠️ ローカル開発環境
 
-### 3. 必要な環境設定
+### 📋 必要な環境設定
 ```bash
 # 1. 依存関係のインストール（グローバル環境に）
 pip3 install -r requirements.txt
@@ -128,33 +216,38 @@ pip3 install -r requirements.txt
 # 以下の2つの設定が必要です：
 # SUPABASE_URL=https://your-project.supabase.co
 # SUPABASE_KEY=your-anon-key
+```
 
-# 3. 起動方法
+### 🚀 起動方法（改善版）
 
-## 基本起動（推奨）
+#### ⚡ 推奨起動方法
+```bash
+# 既存プロセスを強制終了してから起動する安全な方法
 ./start.sh
+```
 
-## バックグラウンド起動（複数プロジェクト環境）
-# 他のプロジェクトでポートが使用中の場合や、複数サーバーを同時実行する場合
+**重要**: `start.sh`は以下の処理を自動で行います：
+1. 既存のプロセスを停止
+2. ポート9000を使用している残存プロセスを強制終了
+3. 新しいサーバーを起動
+
+#### 💡 バックグラウンド起動
+```bash
+# 他のプロジェクトと同時実行する場合
 nohup ./start.sh > admin_server.log 2>&1 &
 
-# バックグラウンド起動後の確認方法
-tail -f admin_server.log  # ログの確認
-lsof -i :9000            # ポート使用状況の確認
+# ログの確認
+tail -f admin_server.log
+```
 
-# 4. 停止方法
+### 🛑 停止方法
 
-## フォアグラウンド起動の場合
+```bash
+# 推奨: 停止スクリプトを使用
+./stop.sh
+
+# または、フォアグラウンド実行中の場合
 # Ctrl+C でサーバーを停止
-
-## バックグラウンド起動の場合
-# プロセスIDを確認して停止
-ps aux | grep "uvicorn main:app"
-kill -9 <PID>
-
-# または、ポートを使用しているプロセスを停止
-lsof -i :9000
-kill -9 <PID>
 ```
 
 ## 🎯 システム概要
@@ -866,6 +959,21 @@ NODE_ENV=development
 
 ## 🔧 最新のアップデート
 
+### ✨ 新機能・改善点（2025-07-15）
+- **🔄 マイクロサービス化完了**: Whisperプロンプト生成機能を独立したマイクロサービスAPIに移行
+  - **外部API統合**: `https://api.hey-watch.me/vibe-aggregator/` への完全移行
+  - **エンドポイント統一**: 直接UI操作とバッチ処理で同じAPIを使用
+  - **本番環境対応**: HTTPS対応の外部URLで安全にアクセス
+  - **動作確認済み**: 開発環境・本番環境での動作テスト完了
+- **🎯 機能統合**: 心理グラフタブのWhisperプロンプト生成機能を外部マイクロサービスに統合
+  - **変更前**: `http://localhost:8002/generate-prompt` (POST) → **変更後**: `https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase` (GET)
+  - **バッチ処理**: `http://localhost:8009/` → `https://api.hey-watch.me/vibe-aggregator/` に統一
+  - **レスポンス形式**: 外部APIの戻り値に合わせてUI表示を最適化
+- **🏗️ アーキテクチャ改善**: ローカル依存からマイクロサービス化によるスケーラビリティ向上
+  - **保守性**: 単一のAPIエンドポイントで管理が簡単
+  - **一貫性**: バッチ処理と直接UI操作で同じAPIを使用
+  - **拡張性**: 他のサービスからも同じAPIを利用可能
+
 ### ✨ 新機能・改善点（2025-07-14）
 - **🌐 本番環境デプロイ完了**: EC2上でDocker化による本番環境構築
   - **HTTPS対応**: admin.hey-watch.me でSSL/TLS暗号化通信
@@ -885,10 +993,14 @@ NODE_ENV=development
   - **運用コマンド**: 日常運用に必要なコマンド集
   - **トラブルシューティング**: 問題発生時の対応手順
 
-### ⚠️ 移行作業中の注意事項
-- **API接続**: 各種分析APIとの接続は段階的に本番用に修正予定
-- **localhost参照**: 現在のAPI呼び出しは開発環境向けのため、ブラウザからは動作しません
-- **機能制限**: 基本的な管理機能は動作するが、分析機能は一時的に制限中
+### ✅ マイクロサービス移行完了状況
+- **Whisperプロンプト生成**: ✅ 完了 - 外部マイクロサービスAPIに移行済み
+- **基本管理機能**: ✅ 完了 - ユーザー・デバイス・通知管理は本番環境で動作中
+- **バッチ処理**: ✅ 完了 - Whisperプロンプト生成ステップは外部API対応済み
+
+### ⚠️ 残り移行作業
+- **ChatGPT分析API**: 🔄 移行予定 - 現在localhost参照のため段階的に修正予定
+- **その他分析API**: 🔄 移行予定 - 各種分析APIとの接続は段階的に本番用に修正予定
 
 ## 🔧 過去のアップデート（2025-07-08）
 
@@ -965,7 +1077,6 @@ NODE_ENV=development
 - **統合起動スクリプト**: `start.sh` - PID管理、ポート解放、依存関係確認
 - **統合停止スクリプト**: `stop.sh` - PIDファイル管理、確実なプロセス終了
 - **プロセス確認**: `check_processes.sh` - 重複プロセス検出とトラブルシューティング
-- **安全な再起動**: `restart.sh` - 完全停止後の新規起動
 
 ### 🛠️ 技術的修正
 - **SED Aggregator API**: `api_sed-aggregator_v1/api_server.py` にCORS設定を追加
@@ -990,7 +1101,7 @@ NODE_ENV=development
 
 ### 🚀 起動方法
 ```bash
-# 推奨起動方法（ポート解放・依存関係確認付き）
+# 推奨起動方法（既存プロセスを強制終了してから起動）
 ./start.sh
 
 # 停止

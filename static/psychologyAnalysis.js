@@ -671,27 +671,31 @@ async function generateWhisperPrompt() {
     if (resultsDiv) resultsDiv.classList.add('hidden');
     
     try {
-        const response = await axios.post('http://localhost:8002/generate-prompt', {
-            device_id: deviceId,
-            date: date
+        // 外部マイクロサービスAPIを呼び出し（GETメソッド、URLパラメータ）
+        const response = await axios.get('https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase', {
+            params: {
+                device_id: deviceId,
+                date: date
+            }
         });
         
         const data = response.data;
-        statusDiv.textContent = `プロンプト生成完了: ${data.transcription_count}件のWhisperデータを統合しました`;
+        statusDiv.textContent = `プロンプト生成完了: ${data.message}`;
         
         if (resultsDiv && resultsContent) {
             resultsContent.innerHTML = `
                 <div class="bg-green-50 border border-green-200 rounded-lg p-4">
                     <h4 class="font-medium text-green-900 mb-3">✅ プロンプト生成結果</h4>
                     <div class="text-sm text-green-700 space-y-2">
-                        <div>統合Whisperデータ: <span class="font-medium">${data.transcription_count}件</span></div>
-                        <div>生成プロンプト文字数: <span class="font-medium">${data.prompt_length}文字</span></div>
-                        <div>処理時刻: <span class="font-medium">${new Date(data.timestamp).toLocaleString('ja-JP')}</span></div>
+                        <div>ステータス: <span class="font-medium">${data.status}</span></div>
+                        <div>結果: <span class="font-medium">${data.message}</span></div>
+                        <div>処理時刻: <span class="font-medium">${new Date().toLocaleString('ja-JP')}</span></div>
                     </div>
                     <div class="mt-4">
-                        <h5 class="font-medium text-green-900 mb-2">生成されたプロンプト（抜粋）:</h5>
-                        <div class="bg-white p-3 rounded border text-xs text-gray-700 max-h-32 overflow-y-auto">
-                            ${data.prompt_preview || '（プロンプトプレビューが利用できません）'}
+                        <h5 class="font-medium text-green-900 mb-2">処理詳細:</h5>
+                        <div class="bg-white p-3 rounded border text-xs text-gray-700">
+                            マイクロサービスAPIによる処理が完了しました。<br>
+                            生成されたプロンプトはSupabaseのvibe_whisper_promptテーブルに保存されています。
                         </div>
                     </div>
                 </div>
@@ -699,7 +703,7 @@ async function generateWhisperPrompt() {
             resultsDiv.classList.remove('hidden');
         }
         
-        showNotification(`プロンプト生成が完了しました（${data.transcription_count}件統合）`, 'success');
+        showNotification(`プロンプト生成が完了しました`, 'success');
         
     } catch (error) {
         console.error('プロンプト生成エラー:', error);
