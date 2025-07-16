@@ -1058,7 +1058,7 @@ async function startOpenSMILEProcessing() {
     statusDiv.textContent = 'OpenSMILE特徴量抽出処理を開始しています...';
     
     try {
-        const response = await axios.post('http://localhost:8011/process/vault-data', {
+        const response = await axios.post('/api/opensmile/process/vault-data', {
             device_id: deviceId,
             date: date
         });
@@ -1084,12 +1084,12 @@ async function startOpenSMILEProcessing() {
 
 async function startOpenSMILEAggregator() {
     const deviceId = document.getElementById('aggregator-device-id').value;
-    const userSession = document.getElementById('user-session').value;
+    const date = document.getElementById('aggregator-date').value;
     const button = document.getElementById('start-aggregator-btn');
     const statusDiv = document.getElementById('aggregator-status');
     
-    if (!deviceId || !userSession) {
-        showNotification('デバイスIDとユーザーセッションを入力してください', 'error');
+    if (!deviceId || !date) {
+        showNotification('デバイスIDと日付を入力してください', 'error');
         return;
     }
     
@@ -1098,14 +1098,19 @@ async function startOpenSMILEAggregator() {
     statusDiv.textContent = 'OpenSMILE Aggregator処理を開始しています...';
     
     try {
-        const response = await axios.post('http://localhost:8011/aggregate-features', {
+        const response = await axios.post('/api/opensmile/aggregate-features', {
             device_id: deviceId,
-            user_session: userSession
+            date: date
         });
         
         const data = response.data;
-        statusDiv.textContent = `OpenSMILE Aggregator処理完了: ${data.aggregated_count}件の特徴量を集約しました`;
-        showNotification(`OpenSMILE Aggregator処理が完了しました（${data.aggregated_count}件集約）`, 'success');
+        if (data.has_data) {
+            statusDiv.textContent = `OpenSMILE Aggregator処理完了: ${data.processed_slots}スロット処理、総感情ポイント: ${data.total_emotion_points}`;
+            showNotification(`OpenSMILE Aggregator処理が完了しました（${data.processed_slots}スロット処理、${data.total_emotion_points}ポイント）`, 'success');
+        } else {
+            statusDiv.textContent = `OpenSMILE Aggregator処理完了: データが存在しません`;
+            showNotification(`指定された日付にはデータが存在しません`, 'info');
+        }
         
     } catch (error) {
         console.error('OpenSMILE Aggregator処理エラー:', error);

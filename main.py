@@ -641,7 +641,9 @@ API_ENDPOINTS = {
     "prompt_gen": "https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase",
     "chatgpt": "https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase",
     "sed": "https://api.hey-watch.me/behavior-features/fetch-and-process",
-    "sed_aggregator": "https://api.hey-watch.me/behavior-aggregator/analysis/sed"
+    "sed_aggregator": "https://api.hey-watch.me/behavior-aggregator/analysis/sed",
+    "opensmile": "https://api.hey-watch.me/emotion-features/process/vault-data",
+    "opensmile_aggregator": "https://api.hey-watch.me/emotion-aggregator/analyze/opensmile-aggregator"
 }
 
 async def check_api_health(session, step_name, base_url):
@@ -1037,6 +1039,117 @@ async def sed_aggregator_proxy(request: Request):
             return aggregator_result.get("data", {})
         else:
             raise HTTPException(status_code=500, detail=aggregator_result.get("message", "SED Aggregator処理に失敗しました"))
+
+@app.post("/api/opensmile/process/vault-data")
+async def opensmile_proxy(request: Request):
+    """OpenSMILE音声特徴量抽出APIへのプロキシエンドポイント（CORS回避用）"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient(timeout=300.0) as session:
+        opensmile_data = {"device_id": device_id, "date": date}
+        opensmile_result = await call_api(session, "OpenSMILE音声特徴量抽出", API_ENDPOINTS["opensmile"], json_data=opensmile_data)
+        
+        if opensmile_result["success"]:
+            return opensmile_result.get("data", {})
+        else:
+            raise HTTPException(status_code=500, detail=opensmile_result.get("message", "OpenSMILE処理に失敗しました"))
+
+@app.post("/api/opensmile/aggregate-features")
+async def opensmile_aggregator_proxy(request: Request):
+    """OpenSMILE Aggregator APIへのプロキシエンドポイント（CORS回避用）
+    
+    非同期タスクベースAPIのため、タスクを開始してから完了まで待機する
+    """
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient(timeout=600.0) as session:
+        # Step 1: タスクを開始
+        aggregator_data = {"device_id": device_id, "date": date}
+        try:
+            start_response = await session.post(
+                API_ENDPOINTS["opensmile_aggregator"],
+                json=aggregator_data,
+                timeout=30.0
+            )
+            start_response.raise_for_status()
+            start_result = start_response.json()
+        except httpx.HTTPStatusError as e:
+            error_msg = f"APIエラー: {e.response.status_code} - {e.response.text}"
+            raise HTTPException(status_code=500, detail=error_msg)
+        except Exception as e:
+            error_msg = f"タスク開始エラー: {str(e)}"
+            raise HTTPException(status_code=500, detail=error_msg)
+
+        task_id = start_result.get("task_id")
+        if not task_id:
+            raise HTTPException(status_code=500, detail="タスクIDが取得できませんでした")
+
+        # Step 2: タスクの完了を待機（最大5分）
+        max_wait = 300  # 5分
+        check_interval = 2  # 2秒ごとにチェック
+        elapsed = 0
+        
+        while elapsed < max_wait:
+            await asyncio.sleep(check_interval)
+            elapsed += check_interval
+            
+            try:
+                # タスクのステータスを確認
+                status_url = API_ENDPOINTS["opensmile_aggregator"].replace("/analyze/opensmile-aggregator", f"/analyze/opensmile-aggregator/{task_id}")
+                status_response = await session.get(status_url, timeout=10.0)
+                status_response.raise_for_status()
+                status_result = status_response.json()
+                
+                if status_result["status"] == "completed":
+                    # 処理完了
+                    if "result" in status_result:
+                        result = status_result["result"]
+                        # UIが期待する形式に変換
+                        return {
+                            "processed_slots": result.get("emotion_graph_length", 0),
+                            "total_emotion_points": result.get("total_emotion_points", 0),
+                            "aggregated_count": result.get("total_emotion_points", 0),  # 互換性のため
+                            "has_data": result.get("total_emotion_points", 0) > 0,
+                            "message": status_result.get("message", "処理完了"),
+                            "output_path": result.get("output_path", "")
+                        }
+                    else:
+                        return {
+                            "processed_slots": 0,
+                            "total_emotion_points": 0,
+                            "aggregated_count": 0,
+                            "has_data": False,
+                            "message": "データが存在しません"
+                        }
+                elif status_result["status"] == "failed":
+                    # 処理失敗
+                    error_msg = status_result.get("error", "不明なエラー")
+                    raise HTTPException(status_code=500, detail=f"感情分析失敗: {error_msg}")
+                
+                # まだ処理中の場合は次のループへ
+                
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    raise HTTPException(status_code=500, detail="タスクが見つかりません")
+                else:
+                    # その他のHTTPエラー
+                    continue
+            except Exception as e:
+                # 通信エラーなどは無視して次のチェックへ
+                continue
+        
+        # タイムアウト
+        raise HTTPException(status_code=500, detail="OpenSMILE Aggregator処理がタイムアウトしました")
 
 
 # =============================================================================
