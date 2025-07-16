@@ -962,7 +962,7 @@ async function startSEDProcessing() {
     statusDiv.textContent = 'SED音響イベント検出処理を開始しています...';
     
     try {
-        const response = await axios.post('http://localhost:8004/fetch-and-process', {
+        const response = await axios.post('/api/sed/fetch-and-process', {
             device_id: deviceId,
             date: date,
             threshold: parseFloat(document.getElementById('sed-threshold').value) || 0.2
@@ -1008,7 +1008,7 @@ async function startSEDAggregatorProcessing() {
     statusDiv.textContent = 'SED Aggregator処理を開始しています...';
     
     try {
-        const response = await axios.post('http://localhost:8010/analysis/sed', {
+        const response = await axios.post('/api/sed-aggregator/analysis/sed', {
             device_id: deviceId,
             date: date
         });

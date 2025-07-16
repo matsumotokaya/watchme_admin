@@ -639,7 +639,9 @@ import asyncio
 API_ENDPOINTS = {
     "whisper": "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe",
     "prompt_gen": "https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase",
-    "chatgpt": "https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase"
+    "chatgpt": "https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase",
+    "sed": "https://api.hey-watch.me/behavior-features/fetch-and-process",
+    "sed_aggregator": "https://api.hey-watch.me/behavior-aggregator/analysis/sed"
 }
 
 async def check_api_health(session, step_name, base_url):
@@ -791,8 +793,8 @@ async def create_behavior_graph_batch(request: Request):
     
     # API定義（行動グラフ関連）
     BEHAVIOR_API_ENDPOINTS = {
-        "sed": "http://localhost:8004/fetch-and-process",
-        "sed_aggregator": "http://localhost:8010/analysis/sed"
+        "sed": "/api/sed/fetch-and-process",  # プロキシ経由で呼び出し
+        "sed_aggregator": "/api/sed-aggregator/analysis/sed"  # プロキシ経由で呼び出し
     }
     
     async with httpx.AsyncClient() as session:
@@ -996,6 +998,45 @@ async def batch_chatgpt_step(request: Request):
             return {"success": True, "message": "ChatGPT分析完了", "data": chatgpt_result.get("data")}
         else:
             return {"success": False, "message": chatgpt_result.get("message", "ChatGPT分析に失敗しました")}
+
+@app.post("/api/sed/fetch-and-process")
+async def sed_proxy(request: Request):
+    """SED音響イベント検出APIへのプロキシエンドポイント（CORS回避用）"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+    threshold = body.get("threshold", 0.2)
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient(timeout=300.0) as session:
+        sed_data = {"device_id": device_id, "date": date, "threshold": threshold}
+        sed_result = await call_api(session, "SED音響イベント検出", API_ENDPOINTS["sed"], json_data=sed_data)
+        
+        if sed_result["success"]:
+            return sed_result.get("data", {})
+        else:
+            raise HTTPException(status_code=500, detail=sed_result.get("message", "SED処理に失敗しました"))
+
+@app.post("/api/sed-aggregator/analysis/sed")
+async def sed_aggregator_proxy(request: Request):
+    """SED Aggregator APIへのプロキシエンドポイント（CORS回避用）"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient(timeout=300.0) as session:
+        aggregator_data = {"device_id": device_id, "date": date}
+        aggregator_result = await call_api(session, "SED Aggregator", API_ENDPOINTS["sed_aggregator"], json_data=aggregator_data)
+        
+        if aggregator_result["success"]:
+            return aggregator_result.get("data", {})
+        else:
+            raise HTTPException(status_code=500, detail=aggregator_result.get("message", "SED Aggregator処理に失敗しました"))
 
 
 # =============================================================================
