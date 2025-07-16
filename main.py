@@ -639,7 +639,7 @@ import asyncio
 API_ENDPOINTS = {
     "whisper": "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe",
     "prompt_gen": "https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase",
-    "chatgpt": "http://localhost:8002/analyze-vibegraph-supabase"
+    "chatgpt": "https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase"
 }
 
 async def check_api_health(session, step_name, base_url):
@@ -905,6 +905,60 @@ async def batch_whisper_step(request: Request):
             return {"success": True, "message": "Whisper処理完了", "data": whisper_result.get("data")}
         else:
             return {"success": False, "message": whisper_result.get("message", "Whisper処理に失敗しました")}
+
+@app.post("/api/whisper/fetch-and-transcribe")
+async def whisper_proxy(request: Request):
+    """Whisper APIへのプロキシエンドポイント（CORS回避用）"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+    model = body.get("model", "base")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient(timeout=600.0) as session:
+        whisper_data = {"device_id": device_id, "date": date, "model": model}
+        whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data=whisper_data)
+        
+        if whisper_result["success"]:
+            return whisper_result.get("data", {})
+        else:
+            raise HTTPException(status_code=500, detail=whisper_result.get("message", "Whisper処理に失敗しました"))
+
+@app.get("/api/prompt/generate-mood-prompt-supabase")
+async def prompt_proxy(device_id: str, date: str):
+    """プロンプト生成APIへのプロキシエンドポイント（CORS回避用）"""
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient(timeout=300.0) as session:
+        params = {"device_id": device_id, "date": date}
+        prompt_result = await call_api(session, "プロンプト生成", API_ENDPOINTS["prompt_gen"], method='get', params=params)
+        
+        if prompt_result["success"]:
+            return prompt_result.get("data", {})
+        else:
+            raise HTTPException(status_code=500, detail=prompt_result.get("message", "プロンプト生成に失敗しました"))
+
+@app.post("/api/chatgpt/analyze-vibegraph-supabase")
+async def chatgpt_proxy(request: Request):
+    """ChatGPT APIへのプロキシエンドポイント（CORS回避用）"""
+    body = await request.json()
+    device_id = body.get("device_id")
+    date = body.get("date")
+
+    if not device_id or not date:
+        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+
+    async with httpx.AsyncClient(timeout=600.0) as session:
+        chatgpt_data = {"device_id": device_id, "date": date}
+        chatgpt_result = await call_api(session, "ChatGPTスコアリング", API_ENDPOINTS["chatgpt"], json_data=chatgpt_data)
+        
+        if chatgpt_result["success"]:
+            return chatgpt_result.get("data", {})
+        else:
+            raise HTTPException(status_code=500, detail=chatgpt_result.get("message", "ChatGPT処理に失敗しました"))
 
 @app.post("/api/batch/prompt-step")
 async def batch_prompt_step(request: Request):

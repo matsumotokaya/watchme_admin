@@ -549,14 +549,52 @@ async function startWhisperProcessing() {
     try {
         const startTime = new Date();
         
-        // 正しいエンドポイントを使用して直接APIを呼び出す
-        const response = await axios.post('https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe', {
-            device_id: deviceId,
-            date: date,
-            model: model  // baseモデル固定
-        }, {
-            timeout: 600000  // 10分のタイムアウト
+        // APIサーバーの接続性確認
+        statusDiv.textContent = 'APIサーバーへの接続を確認中...';
+        console.log('🔍 APIヘルスチェック開始: https://api.hey-watch.me/vibe-transcriber/');
+        try {
+            const healthCheck = await axios.get('https://api.hey-watch.me/vibe-transcriber/', { 
+                timeout: 10000,
+                withCredentials: false
+            });
+            console.log('✅ ヘルスチェック成功:', healthCheck.data);
+            statusDiv.textContent = 'APIサーバー接続OK。音声文字起こし処理を開始...';
+        } catch (healthError) {
+            console.warn('⚠️ ヘルスチェック失敗:', {
+                message: healthError.message,
+                code: healthError.code,
+                response: healthError.response?.data,
+                status: healthError.response?.status
+            });
+            statusDiv.textContent = 'APIサーバーへの接続を確認できませんが、処理を続行します...';
+        }
+        
+        // 管理画面プロキシ経由でAPIを呼び出す（CORS回避）
+        console.log('Whisper APIリクエスト開始（プロキシ経由）:', {
+            url: '/api/whisper/fetch-and-transcribe',
+            proxy_target: 'https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe',
+            data: { device_id: deviceId, date: date, model: model }
         });
+        
+        const response = await axios({
+            method: 'POST',
+            url: '/api/whisper/fetch-and-transcribe',  // 管理画面のプロキシエンドポイント
+            data: {
+                device_id: deviceId,
+                date: date,
+                model: model  // baseモデル固定
+            },
+            timeout: 600000,  // 10分のタイムアウト
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            validateStatus: function (status) {
+                return status >= 200 && status < 500; // 4xxエラーも受け入れる
+            }
+        });
+        
+        console.log('Whisper APIレスポンス受信:', response.status, response.data);
         
         const result = response.data;
         const endTime = new Date();
@@ -600,8 +638,17 @@ async function startWhisperProcessing() {
         
     } catch (error) {
         console.error('Whisper処理エラー:', error);
+        console.error('エラー詳細:', {
+            message: error.message,
+            code: error.code,
+            response: error.response?.data,
+            status: error.response?.status,
+            stack: error.stack
+        });
         
         let errorMessage;
+        let errorDetails = '';
+        
         if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
             errorMessage = 'タイムアウトしました。処理はバックグラウンドで継続されている可能性があります。';
             statusDiv.innerHTML = `
@@ -613,9 +660,38 @@ async function startWhisperProcessing() {
                     </div>
                 </div>
             `;
+        } else if (error.code === 'ERR_NETWORK') {
+            errorMessage = 'ネットワーク接続エラーが発生しました';
+            errorDetails = `
+                <div class="mt-2 text-xs">
+                    <p><strong>考えられる原因:</strong></p>
+                    <ul class="list-disc list-inside ml-2">
+                        <li>インターネット接続の問題</li>
+                        <li>APIサーバーのダウンタイム</li>
+                        <li>CORS設定の問題</li>
+                        <li>SSL証明書の問題</li>
+                    </ul>
+                    <p class="mt-2"><strong>確認方法:</strong></p>
+                    <p>ブラウザの開発者ツール（F12）→ NetworkタブでAPIリクエストの詳細を確認してください</p>
+                </div>
+            `;
+            statusDiv.innerHTML = `
+                <div class="text-red-600">
+                    <span>❌ ${errorMessage}</span>
+                    ${errorDetails}
+                </div>
+            `;
         } else {
             errorMessage = error.response?.data?.detail || error.message || 'Whisper処理に失敗しました';
-            statusDiv.textContent = `エラー: ${errorMessage}`;
+            if (error.response?.status) {
+                errorDetails = `HTTPステータス: ${error.response.status}`;
+            }
+            statusDiv.innerHTML = `
+                <div class="text-red-600">
+                    <span>❌ エラー: ${errorMessage}</span>
+                    ${errorDetails ? `<div class="text-sm mt-1">${errorDetails}</div>` : ''}
+                </div>
+            `;
         }
         
         showNotification(errorMessage, error.code === 'ECONNABORTED' ? 'warning' : 'error');
@@ -671,8 +747,14 @@ async function generateWhisperPrompt() {
     if (resultsDiv) resultsDiv.classList.add('hidden');
     
     try {
-        // 外部マイクロサービスAPIを呼び出し（GETメソッド、URLパラメータ）
-        const response = await axios.get('https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase', {
+        // 管理画面プロキシ経由でAPIを呼び出し（CORS回避）
+        console.log('プロンプト生成APIリクエスト開始（プロキシ経由）:', {
+            url: '/api/prompt/generate-mood-prompt-supabase',
+            proxy_target: 'https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase',
+            params: { device_id: deviceId, date: date }
+        });
+        
+        const response = await axios.get('/api/prompt/generate-mood-prompt-supabase', {
             params: {
                 device_id: deviceId,
                 date: date
@@ -764,7 +846,14 @@ async function startChatGPTAnalysis() {
     if (resultsDiv) resultsDiv.classList.add('hidden');
     
     try {
-        const response = await axios.post('http://localhost:8002/analyze-psychology', {
+        // 管理画面プロキシ経由でAPIを呼び出し（CORS回避）
+        console.log('ChatGPT APIリクエスト開始（プロキシ経由）:', {
+            url: '/api/chatgpt/analyze-vibegraph-supabase',
+            proxy_target: 'https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase',
+            data: { device_id: deviceId, date: date }
+        });
+        
+        const response = await axios.post('/api/chatgpt/analyze-vibegraph-supabase', {
             device_id: deviceId,
             date: date
         });

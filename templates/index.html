@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WatchMe Admin</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="128x128" href="/static/icons/favicon-128x128.png">
+    <link rel="icon" type="image/png" sizes="196x196" href="/static/icons/favicon-196x196.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="/static/icons/android-chrome-512x512.png">
+    <link rel="shortcut icon" href="/static/icons/favicon-32x32.png">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
 </head>
@@ -71,6 +80,9 @@
                         <div class="mt-8">
                             <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
                                 <h3 class="text-lg font-medium text-blue-900 mb-4">🎤 Whisper音声文字起こし</h3>
+                                <div class="text-xs text-blue-600 mb-2">
+                                    <span class="font-mono bg-blue-100 px-2 py-1 rounded">https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe</span>
+                                </div>
                                 <p class="text-sm text-blue-700 mb-4">指定したデバイスIDと日付の音声データを文字起こしして、データベースに保存します。</p>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -113,6 +125,9 @@
                         <div class="mt-8">
                             <div class="bg-purple-50 border border-purple-200 rounded-lg p-6">
                                 <h3 class="text-lg font-medium text-purple-900 mb-4">📝 Whisperプロンプト生成</h3>
+                                <div class="text-xs text-purple-600 mb-2">
+                                    <span class="font-mono bg-purple-100 px-2 py-1 rounded">https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase</span>
+                                </div>
                                 <p class="text-sm text-purple-700 mb-4">Whisperで文字起こししたデータを統合して、ChatGPT分析用のプロンプトを生成します。</p>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -149,6 +164,9 @@
                         <div class="mt-8">
                             <div class="bg-green-50 border border-green-200 rounded-lg p-6">
                                 <h3 class="text-lg font-medium text-green-900 mb-4">🤖 ChatGPTスコアリング</h3>
+                                <div class="text-xs text-green-600 mb-2">
+                                    <span class="font-mono bg-green-100 px-2 py-1 rounded">https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase</span>
+                                </div>
                                 <p class="text-sm text-green-700 mb-4">Whisperプロンプトを元にChatGPTで心理スコアを分析し、結果をデータベースに保存します。</p>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
