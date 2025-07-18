@@ -13,6 +13,7 @@ export function initializePsychologyAnalysis() {
     initializeAllDates();
     initializeBatchProcessingDefaults();
     setupPsychologyEventListeners();
+    initializeSchedulers();
     console.log('心理分析モジュール初期化完了');
 }
 
@@ -107,6 +108,9 @@ function setupPsychologyEventListeners() {
     if (startPsychologyBatchBtn) {
         startPsychologyBatchBtn.addEventListener('click', startPsychologyBatch);
     }
+
+    // スケジューラー機能のイベントリスナー
+    setupSchedulerEventListeners();
     
     // 行動グラフバッチ処理機能のイベントリスナー
     const startBehaviorBatchBtn = document.getElementById('start-behavior-batch-btn');
@@ -1122,6 +1126,387 @@ async function startOpenSMILEAggregator() {
         button.textContent = '📈 OpenSMILE Aggregator';
     }
 }
+
+// =============================================================================
+// スケジューラー機能
+// =============================================================================
+
+// スケジューラーの状態を管理するグローバル変数
+let schedulerStates = {
+    whisper: { enabled: false, interval: 1, nextRun: null },
+    prompt: { enabled: false, interval: 1, nextRun: null },
+    chatgpt: { enabled: false, interval: 1, nextRun: null }
+};
+
+function initializeSchedulers() {
+    // Whisper試験版スケジューラーの初期化
+    initializeWhisperTrialScheduler();
+    
+    // 既存の個別スケジューラー（非表示）
+    updateSchedulerUI('prompt');
+    updateSchedulerUI('chatgpt');
+    
+    // スケジューラーログの初期化
+    loadSchedulerLogs('prompt');
+    loadSchedulerLogs('chatgpt');
+}
+
+function initializeWhisperTrialScheduler() {
+    // Whisper試験版スケジューラーの状態を取得・表示
+    updateWhisperTrialSchedulerStatus();
+    
+    // イベントリスナーを設定
+    const whisperTrialToggle = document.getElementById('whisper-trial-scheduler-toggle');
+    const runNowBtn = document.getElementById('whisper-trial-run-now-btn');
+    
+    if (whisperTrialToggle) {
+        whisperTrialToggle.addEventListener('change', async (e) => {
+            await toggleWhisperTrialScheduler(e.target.checked);
+        });
+    }
+    
+    if (runNowBtn) {
+        runNowBtn.addEventListener('click', async () => {
+            await runWhisperTrialSchedulerNow();
+        });
+    }
+    
+    console.log('Whisper試験版スケジューラー初期化完了');
+}
+
+function setupSchedulerEventListeners() {
+    // Whisperスケジューラー
+    const whisperToggle = document.getElementById('whisper-scheduler-toggle');
+    const whisperInterval = document.getElementById('whisper-schedule-interval');
+    
+    if (whisperToggle) {
+        whisperToggle.addEventListener('change', (e) => {
+            toggleScheduler('whisper', e.target.checked);
+        });
+    }
+    
+    if (whisperInterval) {
+        whisperInterval.addEventListener('change', (e) => {
+            updateSchedulerInterval('whisper', parseInt(e.target.value));
+        });
+    }
+    
+    // Promptスケジューラー
+    const promptToggle = document.getElementById('prompt-scheduler-toggle');
+    const promptInterval = document.getElementById('prompt-schedule-interval');
+    
+    if (promptToggle) {
+        promptToggle.addEventListener('change', (e) => {
+            toggleScheduler('prompt', e.target.checked);
+        });
+    }
+    
+    if (promptInterval) {
+        promptInterval.addEventListener('change', (e) => {
+            updateSchedulerInterval('prompt', parseInt(e.target.value));
+        });
+    }
+    
+    // ChatGPTスケジューラー
+    const chatgptToggle = document.getElementById('chatgpt-scheduler-toggle');
+    const chatgptInterval = document.getElementById('chatgpt-schedule-interval');
+    
+    if (chatgptToggle) {
+        chatgptToggle.addEventListener('change', (e) => {
+            toggleScheduler('chatgpt', e.target.checked);
+        });
+    }
+    
+    if (chatgptInterval) {
+        chatgptInterval.addEventListener('change', (e) => {
+            updateSchedulerInterval('chatgpt', parseInt(e.target.value));
+        });
+    }
+}
+
+async function toggleScheduler(apiType, enabled) {
+    const deviceId = getDeviceIdForAPI(apiType);
+    if (!deviceId) {
+        showNotification('デバイスIDを入力してください', 'error');
+        return;
+    }
+    
+    try {
+        if (enabled) {
+            // スケジューラーを開始
+            const response = await fetch('/api/scheduler/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_type: apiType,
+                    device_id: deviceId,
+                    interval_hours: schedulerStates[apiType].interval,
+                    enabled: true
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                schedulerStates[apiType].enabled = true;
+                schedulerStates[apiType].nextRun = data.next_run;
+                updateSchedulerUI(apiType);
+                showSchedulerLogs(apiType);
+                showNotification(`${apiType}スケジューラーを開始しました`, 'success');
+            } else {
+                throw new Error('スケジューラー開始に失敗しました');
+            }
+        } else {
+            // スケジューラーを停止
+            const response = await fetch('/api/scheduler/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_type: apiType,
+                    device_id: deviceId
+                })
+            });
+            
+            if (response.ok) {
+                schedulerStates[apiType].enabled = false;
+                schedulerStates[apiType].nextRun = null;
+                updateSchedulerUI(apiType);
+                hideSchedulerLogs(apiType);
+                showNotification(`${apiType}スケジューラーを停止しました`, 'success');
+            } else {
+                throw new Error('スケジューラー停止に失敗しました');
+            }
+        }
+    } catch (error) {
+        console.error('スケジューラー操作エラー:', error);
+        showNotification(`スケジューラー操作エラー: ${error.message}`, 'error');
+        
+        // トグルを元に戻す
+        const toggle = document.getElementById(`${apiType}-scheduler-toggle`);
+        if (toggle) {
+            toggle.checked = !enabled;
+        }
+    }
+}
+
+async function updateSchedulerInterval(apiType, intervalHours) {
+    schedulerStates[apiType].interval = intervalHours;
+    
+    // スケジューラーが有効な場合は再起動
+    if (schedulerStates[apiType].enabled) {
+        const deviceId = getDeviceIdForAPI(apiType);
+        if (deviceId) {
+            await toggleScheduler(apiType, false);
+            await toggleScheduler(apiType, true);
+        }
+    }
+}
+
+function updateSchedulerUI(apiType) {
+    const nextRunDiv = document.getElementById(`${apiType}-next-run`);
+    if (nextRunDiv) {
+        if (schedulerStates[apiType].enabled && schedulerStates[apiType].nextRun) {
+            const nextRun = new Date(schedulerStates[apiType].nextRun);
+            nextRunDiv.textContent = nextRun.toLocaleString('ja-JP');
+        } else {
+            nextRunDiv.textContent = '未設定';
+        }
+    }
+}
+
+function getDeviceIdForAPI(apiType) {
+    const deviceInputs = {
+        whisper: 'whisper-device-id',
+        prompt: 'prompt-device-id',
+        chatgpt: 'chatgpt-device-id'
+    };
+    
+    const input = document.getElementById(deviceInputs[apiType]);
+    return input ? input.value.trim() : 'd067d407-cf73-4174-a9c1-d91fb60d64d0';
+}
+
+async function loadSchedulerLogs(apiType) {
+    const deviceId = getDeviceIdForAPI(apiType);
+    if (!deviceId) return;
+    
+    try {
+        const response = await fetch(`/api/scheduler/logs?api_type=${apiType}&device_id=${deviceId}&limit=20`);
+        if (response.ok) {
+            const data = await response.json();
+            displaySchedulerLogs(apiType, data.logs);
+        }
+    } catch (error) {
+        console.error('スケジューラーログ取得エラー:', error);
+    }
+}
+
+function displaySchedulerLogs(apiType, logs) {
+    const logContent = document.getElementById(`${apiType}-scheduler-log-content`);
+    if (!logContent) return;
+    
+    if (logs.length === 0) {
+        logContent.textContent = 'スケジューラーログがありません';
+        return;
+    }
+    
+    const logText = logs.map(log => {
+        const timestamp = new Date(log.timestamp).toLocaleString('ja-JP');
+        const duration = log.duration_seconds ? ` (${log.duration_seconds.toFixed(1)}秒)` : '';
+        return `[${timestamp}] ${log.status}: ${log.message}${duration}`;
+    }).join('\n');
+    
+    logContent.textContent = logText;
+}
+
+function showSchedulerLogs(apiType) {
+    const logsDiv = document.getElementById(`${apiType}-scheduler-logs`);
+    if (logsDiv) {
+        logsDiv.classList.remove('hidden');
+        loadSchedulerLogs(apiType);
+    }
+}
+
+function hideSchedulerLogs(apiType) {
+    const logsDiv = document.getElementById(`${apiType}-scheduler-logs`);
+    if (logsDiv) {
+        logsDiv.classList.add('hidden');
+    }
+}
+
+// 定期的にスケジューラーログを更新
+setInterval(() => {
+    Object.keys(schedulerStates).forEach(apiType => {
+        if (schedulerStates[apiType].enabled) {
+            loadSchedulerLogs(apiType);
+        }
+    });
+}, 30000); // 30秒毎に更新
+
+// =============================================================================
+// Whisper試験版スケジューラー関数
+// =============================================================================
+
+async function updateWhisperTrialSchedulerStatus() {
+    try {
+        const response = await axios.get('/api/whisper-trial-scheduler/status');
+        const status = response.data;
+        
+        // UI更新
+        const toggle = document.getElementById('whisper-trial-scheduler-toggle');
+        const statusText = document.getElementById('whisper-trial-status-text');
+        const logsContainer = document.getElementById('whisper-trial-logs');
+        
+        if (toggle) {
+            toggle.checked = status.is_running;
+        }
+        
+        if (statusText) {
+            statusText.textContent = status.is_running ? '稼働中' : '停止中';
+            statusText.className = status.is_running ? 'text-green-600' : 'text-gray-500';
+        }
+        
+        // ログ表示
+        if (logsContainer && status.logs) {
+            const logHtml = status.logs.map(log => {
+                const time = new Date(log.timestamp).toLocaleTimeString();
+                let colorClass = 'text-gray-600';
+                
+                switch (log.status) {
+                    case 'success':
+                        colorClass = 'text-green-600';
+                        break;
+                    case 'error':
+                        colorClass = 'text-red-600';
+                        break;
+                    case 'warning':
+                        colorClass = 'text-yellow-600';
+                        break;
+                    case 'info':
+                        colorClass = 'text-blue-600';
+                        break;
+                }
+                
+                return `<div class="text-xs ${colorClass} font-mono">
+                    ${time} - ${log.message}
+                </div>`;
+            }).join('');
+            
+            logsContainer.innerHTML = logHtml;
+        }
+        
+        console.log('Whisper試験版スケジューラー状態更新完了:', status);
+        
+    } catch (error) {
+        console.error('Whisper試験版スケジューラー状態取得エラー:', error);
+    }
+}
+
+async function toggleWhisperTrialScheduler(enabled) {
+    try {
+        const endpoint = enabled ? '/api/whisper-trial-scheduler/start' : '/api/whisper-trial-scheduler/stop';
+        const response = await axios.post(endpoint);
+        
+        if (response.data.success) {
+            showNotification(response.data.message, 'success');
+            // 状態を更新
+            setTimeout(() => {
+                updateWhisperTrialSchedulerStatus();
+            }, 500);
+        } else {
+            showNotification(response.data.message, 'warning');
+            // トグルを元に戻す
+            const toggle = document.getElementById('whisper-trial-scheduler-toggle');
+            if (toggle) {
+                toggle.checked = !enabled;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Whisper試験版スケジューラー操作エラー:', error);
+        showNotification('スケジューラー操作に失敗しました', 'error');
+        
+        // トグルを元に戻す
+        const toggle = document.getElementById('whisper-trial-scheduler-toggle');
+        if (toggle) {
+            toggle.checked = !enabled;
+        }
+    }
+}
+
+async function runWhisperTrialSchedulerNow() {
+    try {
+        const button = document.getElementById('whisper-trial-run-now-btn');
+        if (button) {
+            button.disabled = true;
+            button.textContent = '実行中...';
+        }
+        
+        const response = await axios.post('/api/whisper-trial-scheduler/run-now');
+        
+        if (response.data.success) {
+            showNotification(response.data.message, 'success');
+        } else {
+            showNotification('処理の実行に失敗しました', 'error');
+        }
+        
+        // 状態を更新
+        setTimeout(() => {
+            updateWhisperTrialSchedulerStatus();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Whisper試験版スケジューラー即時実行エラー:', error);
+        showNotification('処理の実行に失敗しました', 'error');
+    } finally {
+        const button = document.getElementById('whisper-trial-run-now-btn');
+        if (button) {
+            button.disabled = false;
+            button.textContent = '今すぐ実行';
+        }
+    }
+}
+
+// 定期的にWhisper試験版スケジューラーの状態を更新
+setInterval(updateWhisperTrialSchedulerStatus, 30000); // 30秒毎
 
 // =============================================================================
 // DOMContentLoaded時の初期化

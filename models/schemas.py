@@ -244,3 +244,49 @@ class PaginatedDevicesResponse(PaginatedResponse):
 class PaginatedNotificationsResponse(PaginatedResponse):
     """ページネーション付き通知一覧レスポンス"""
     items: List[Notification]
+
+
+# =============================================================================
+# スケジューラー関連モデル
+# =============================================================================
+
+class SchedulerAPIType(str, Enum):
+    """スケジューラーで管理するAPI種別"""
+    WHISPER = "whisper"
+    PROMPT = "prompt"
+    CHATGPT = "chatgpt"
+
+class SchedulerConfig(BaseModel):
+    """スケジューラー設定"""
+    api_type: SchedulerAPIType = Field(..., description="API種別")
+    device_id: str = Field(..., description="デバイスID")
+    interval_hours: int = Field(..., ge=1, le=24, description="実行間隔（時間）")
+    enabled: bool = Field(True, description="有効/無効")
+
+class SchedulerStatus(BaseModel):
+    """スケジューラー状態"""
+    api_type: SchedulerAPIType = Field(..., description="API種別")
+    device_id: str = Field(..., description="デバイスID")
+    enabled: bool = Field(..., description="有効/無効")
+    interval_hours: int = Field(..., description="実行間隔（時間）")
+    last_run: Optional[datetime] = Field(None, description="最終実行時刻")
+    next_run: Optional[datetime] = Field(None, description="次回実行予定時刻")
+    created_at: datetime = Field(..., description="作成時刻")
+
+class SchedulerLogEntry(BaseModel):
+    """スケジューラー実行ログエントリ"""
+    timestamp: datetime = Field(..., description="実行時刻")
+    api_type: SchedulerAPIType = Field(..., description="API種別")
+    device_id: str = Field(..., description="デバイスID")
+    status: str = Field(..., description="実行状態")
+    message: str = Field(..., description="実行メッセージ")
+    execution_type: str = Field(..., description="実行種別（scheduled/manual）")
+    duration_seconds: Optional[float] = Field(None, description="実行時間（秒）")
+    error_details: Optional[str] = Field(None, description="エラー詳細")
+
+class SchedulerLogResponse(BaseModel):
+    """スケジューラーログレスポンス"""
+    api_type: SchedulerAPIType = Field(..., description="API種別")
+    device_id: str = Field(..., description="デバイスID")
+    logs: List[SchedulerLogEntry] = Field(..., description="ログエントリ一覧")
+    total_count: int = Field(..., description="総ログ数")

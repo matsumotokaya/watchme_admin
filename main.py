@@ -17,6 +17,11 @@ from datetime import datetime, timedelta
 import json
 import base64
 from fastapi import Query
+import asyncio
+import httpx
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import logging
 
 from api.supabase_client import SupabaseClient
 from models.schemas import (
@@ -31,7 +36,9 @@ from models.schemas import (
     NotificationType, Notification, NotificationCreate, NotificationUpdate,
     NotificationBroadcast, NotificationBroadcastResponse,
     # ページネーション関連
-    PaginationParams, PaginatedUsersResponse, PaginatedDevicesResponse, PaginatedNotificationsResponse
+    PaginationParams, PaginatedUsersResponse, PaginatedDevicesResponse, PaginatedNotificationsResponse,
+    # スケジューラー関連
+    SchedulerAPIType, SchedulerConfig, SchedulerStatus, SchedulerLogEntry, SchedulerLogResponse
 )
 
 app = FastAPI(title="WatchMe Admin (Fixed)", description="修正済みWatchMe管理画面API", version="2.0.0")
@@ -60,6 +67,448 @@ except Exception as e:
 def get_supabase_client():
     """初期化済みのSupabaseクライアントを取得"""
     return supabase_client
+
+
+# =============================================================================
+# スケジューラー管理クラス
+# =============================================================================
+
+class WhisperTrialScheduler:
+    """Whisper試験版スケジューラークラス"""
+    
+    def __init__(self):
+        self.scheduler = AsyncIOScheduler()
+        self.is_running = False
+        self.logs: List[SchedulerLogEntry] = []
+        self.job_id = "whisper_trial_scheduler"
+        self.scheduler.start()
+        
+    def start_trial_scheduler(self):
+        """3時間おきのスケジューラーを開始"""
+        if self.is_running:
+            self._add_log("warning", "スケジューラーは既に実行中です")
+            return False
+            
+        # 3時間おきのcron設定 (0, 3, 6, 9, 12, 15, 18, 21時)
+        self.scheduler.add_job(
+            self._process_whisper_slots,
+            'cron',
+            hour='0,3,6,9,12,15,18,21',
+            id=self.job_id,
+            replace_existing=True
+        )
+        
+        self.is_running = True
+        self._add_log("success", "Whisper試験スケジューラーを開始しました")
+        return True
+        
+    def stop_trial_scheduler(self):
+        """スケジューラーを停止"""
+        if not self.is_running:
+            self._add_log("warning", "スケジューラーは実行されていません")
+            return False
+            
+        try:
+            self.scheduler.remove_job(self.job_id)
+            self.is_running = False
+            self._add_log("success", "Whisper試験スケジューラーを停止しました")
+            return True
+        except Exception as e:
+            self._add_log("error", f"スケジューラー停止に失敗: {str(e)}")
+            return False
+            
+    async def _process_whisper_slots(self):
+        """24時間前から現在までの未処理音声を処理"""
+        start_time = datetime.now()
+        self._add_log("info", "🚀 Whisper自動処理を開始")
+        
+        try:
+            # デフォルトデバイスID
+            device_id = "d067d407-cf73-4174-a9c1-d91fb60d64d0"
+            
+            # 現在時刻と24時間前を計算
+            now = datetime.now()
+            start_time_utc = (now - timedelta(hours=24)).isoformat() + "+00:00"
+            end_time_utc = now.isoformat() + "+00:00"
+            
+            self._add_log("info", f"📅 処理対象期間: 過去24時間")
+            self._add_log("info", f"⏰ 現在時刻: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            # audio_filesテーブルから未処理ファイルを確認
+            supabase_client = get_supabase_client()
+            
+            # 24時間以内のaudio_filesを取得（手動でフィルタリング）
+            all_audio_files = await supabase_client.select(
+                "audio_files",
+                filters={"device_id": device_id}
+            )
+            
+            # 24時間以内かつwhisper_status='pending'のファイルをフィルタ
+            pending_files = []
+            for file in all_audio_files:
+                recorded_at = datetime.fromisoformat(file['recorded_at'].replace('+00:00', ''))
+                if recorded_at >= (now - timedelta(hours=24)) and file.get('whisper_status') == 'pending':
+                    pending_files.append(file)
+            
+            self._add_log("info", f"📋 audio_filesテーブル確認: {len(pending_files)}件の未処理ファイルを検出")
+            
+            # 処理対象の日付を取得
+            dates_to_process = set()
+            for file in pending_files:
+                date = file['recorded_at'].split('T')[0]
+                dates_to_process.add(date)
+            
+            dates_to_process = sorted(list(dates_to_process))
+            
+            if not dates_to_process:
+                self._add_log("info", "ℹ️ 処理対象のファイルがありません")
+                return
+            
+            total_transcribed = 0
+            total_skipped_db = 0
+            total_skipped_no_audio = 0
+            total_errors = 0
+            
+            # 各日付を処理
+            for date in dates_to_process:
+                try:
+                    # この日付の未処理ファイルとfile_pathを取得
+                    date_files = [f for f in pending_files if f['recorded_at'].startswith(date)]
+                    file_paths = [f['file_path'] for f in date_files]
+                    
+                    self._add_log("info", f"📆 {date} の処理を開始... (未処理: {len(date_files)}件)")
+                    
+                    # file_pathの詳細をログに記録
+                    for file_path in file_paths:
+                        time_block = file_path.split('/')[-2] if '/' in file_path else 'unknown'
+                        self._add_log("info", f"  📁 {time_block} のファイルを処理対象に追加")
+                    
+                    async with httpx.AsyncClient(timeout=600) as client:
+                        url = "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe"
+                        payload = {
+                            "device_id": device_id,
+                            "date": date,
+                            "model": "base",
+                            "file_paths": file_paths  # file_pathリストを追加
+                        }
+                        
+                        response = await client.post(url, json=payload)
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            summary = result.get("summary", {})
+                            
+                            # 処理結果をログに記録
+                            transcribed = summary.get("successfully_transcribed", 0)
+                            skipped_db = summary.get("skipped_as_processed_in_db", 0)
+                            skipped_no_audio = summary.get("skipped_as_no_audio_in_s3", 0)
+                            errors = summary.get("errors", 0)
+                            execution_time = result.get("execution_time_seconds", 0)
+                            
+                            total_transcribed += transcribed
+                            total_skipped_db += skipped_db
+                            total_skipped_no_audio += skipped_no_audio
+                            total_errors += errors
+                            
+                            if transcribed > 0:
+                                self._add_log("success", 
+                                    f"✅ {date}: {transcribed}件の新規文字起こし完了 "
+                                    f"(処理済み: {skipped_db}件, 音声なし: {skipped_no_audio}件, "
+                                    f"実行時間: {execution_time:.1f}秒)")
+                            else:
+                                self._add_log("info", 
+                                    f"ℹ️ {date}: 新規処理なし "
+                                    f"(処理済み: {skipped_db}件, 音声なし: {skipped_no_audio}件)")
+                                    
+                        else:
+                            self._add_log("error", f"❌ {date}: APIエラー (status: {response.status_code})")
+                            total_errors += 1
+                            
+                except Exception as e:
+                    self._add_log("error", f"❌ {date} の処理中にエラー: {str(e)}")
+                    total_errors += 1
+                    
+                # 処理間隔を空ける（次の日付がある場合のみ）
+                if date != dates_to_process[-1]:
+                    await asyncio.sleep(2)
+                
+            # 全体の処理結果をまとめて記録
+            duration = (datetime.now() - start_time).total_seconds()
+            
+            if total_transcribed > 0 or total_errors == 0:
+                self._add_log("success", 
+                    f"🎉 処理完了 (24時間分): "
+                    f"新規文字起こし {total_transcribed}件, "
+                    f"処理済みスキップ {total_skipped_db}件, "
+                    f"音声なしスキップ {total_skipped_no_audio}件 "
+                    f"(実行時間: {duration:.1f}秒)")
+            else:
+                self._add_log("warning", 
+                    f"⚠️ 処理完了: エラー {total_errors}件発生 "
+                    f"(実行時間: {duration:.1f}秒)")
+                    
+        except Exception as e:
+            duration = (datetime.now() - start_time).total_seconds()
+            self._add_log("error", f"❌ 処理エラー: {str(e)} (実行時間: {duration:.1f}秒)")
+            
+    async def run_now(self):
+        """手動実行（今すぐ実行）"""
+        self._add_log("info", "📌 手動実行を開始")
+        await self._process_whisper_slots()
+            
+    def _add_log(self, status: str, message: str):
+        """ログエントリを追加"""
+        log_entry = SchedulerLogEntry(
+            timestamp=datetime.now(),
+            api_type=SchedulerAPIType.WHISPER,
+            device_id="d067d407-cf73-4174-a9c1-d91fb60d64d0",
+            status=status,
+            message=message,
+            execution_type="scheduled"
+        )
+        
+        self.logs.append(log_entry)
+        
+        # ログは最新100件まで保持
+        if len(self.logs) > 100:
+            self.logs = self.logs[-100:]
+            
+    def get_status(self) -> Dict[str, Any]:
+        """現在の状態を取得"""
+        return {
+            "is_running": self.is_running,
+            "logs": self.logs[-20:],  # 最新20件
+            "total_logs": len(self.logs)
+        }
+
+class APISchedulerManager:
+    """各APIのスケジューラーを管理するクラス"""
+    
+    def __init__(self):
+        self.scheduler = AsyncIOScheduler()
+        self.active_jobs: Dict[str, Dict[str, Any]] = {}
+        self.scheduler_logs: Dict[str, List[SchedulerLogEntry]] = {}
+        self.scheduler.start()
+        
+    def _get_job_id(self, api_type: SchedulerAPIType, device_id: str) -> str:
+        """ジョブIDを生成"""
+        return f"{api_type.value}_{device_id}"
+        
+    def _add_log_entry(self, api_type: SchedulerAPIType, device_id: str, status: str, 
+                      message: str, execution_type: str = "scheduled", 
+                      duration_seconds: Optional[float] = None, 
+                      error_details: Optional[str] = None):
+        """ログエントリを追加"""
+        key = f"{api_type.value}_{device_id}"
+        if key not in self.scheduler_logs:
+            self.scheduler_logs[key] = []
+            
+        log_entry = SchedulerLogEntry(
+            timestamp=datetime.now(),
+            api_type=api_type,
+            device_id=device_id,
+            status=status,
+            message=message,
+            execution_type=execution_type,
+            duration_seconds=duration_seconds,
+            error_details=error_details
+        )
+        
+        self.scheduler_logs[key].append(log_entry)
+        
+        # 最新100件のログのみ保持
+        if len(self.scheduler_logs[key]) > 100:
+            self.scheduler_logs[key] = self.scheduler_logs[key][-100:]
+            
+    async def _call_api_endpoint(self, api_type: SchedulerAPIType, device_id: str, date: str = None) -> Dict[str, Any]:
+        """APIエンドポイントを呼び出し"""
+        if date is None:
+            date = datetime.now().strftime("%Y-%m-%d")
+            
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            if api_type == SchedulerAPIType.WHISPER:
+                response = await client.post(
+                    f"http://localhost:9000/api/whisper/fetch-and-transcribe",
+                    json={
+                        "device_id": device_id,
+                        "date": date,
+                        "model": "base"
+                    }
+                )
+            elif api_type == SchedulerAPIType.PROMPT:
+                response = await client.get(
+                    f"http://localhost:9000/api/prompt/generate-mood-prompt-supabase",
+                    params={
+                        "device_id": device_id,
+                        "date": date
+                    }
+                )
+            elif api_type == SchedulerAPIType.CHATGPT:
+                response = await client.post(
+                    f"http://localhost:9000/api/chatgpt/analyze-vibegraph-supabase",
+                    json={
+                        "device_id": device_id,
+                        "date": date
+                    }
+                )
+            else:
+                raise ValueError(f"Unknown API type: {api_type}")
+                
+            response.raise_for_status()
+            return response.json()
+            
+    async def _scheduled_task(self, api_type: SchedulerAPIType, device_id: str):
+        """スケジュールされたタスクを実行"""
+        start_time = datetime.now()
+        
+        try:
+            self._add_log_entry(
+                api_type, device_id, "started", 
+                f"スケジュール実行開始: {api_type.value}", "scheduled"
+            )
+            
+            result = await self._call_api_endpoint(api_type, device_id)
+            
+            duration = (datetime.now() - start_time).total_seconds()
+            self._add_log_entry(
+                api_type, device_id, "completed", 
+                f"スケジュール実行完了: {api_type.value}", "scheduled",
+                duration_seconds=duration
+            )
+            
+            # 最終実行時刻を更新
+            job_id = self._get_job_id(api_type, device_id)
+            if job_id in self.active_jobs:
+                self.active_jobs[job_id]["last_run"] = datetime.now()
+                
+        except Exception as e:
+            duration = (datetime.now() - start_time).total_seconds()
+            self._add_log_entry(
+                api_type, device_id, "failed", 
+                f"スケジュール実行エラー: {api_type.value}", "scheduled",
+                duration_seconds=duration, error_details=str(e)
+            )
+            
+    async def start_scheduler(self, config: SchedulerConfig) -> SchedulerStatus:
+        """スケジューラーを開始"""
+        job_id = self._get_job_id(config.api_type, config.device_id)
+        
+        # 既存のジョブがあれば停止
+        if job_id in self.active_jobs:
+            self.scheduler.remove_job(job_id)
+            
+        # 新しいジョブを追加
+        next_run = datetime.now() + timedelta(hours=config.interval_hours)
+        self.scheduler.add_job(
+            self._scheduled_task,
+            trigger=IntervalTrigger(hours=config.interval_hours),
+            id=job_id,
+            args=[config.api_type, config.device_id],
+            next_run_time=next_run
+        )
+        
+        # アクティブジョブリストに追加
+        self.active_jobs[job_id] = {
+            "api_type": config.api_type,
+            "device_id": config.device_id,
+            "enabled": config.enabled,
+            "interval_hours": config.interval_hours,
+            "last_run": None,
+            "next_run": next_run,
+            "created_at": datetime.now()
+        }
+        
+        self._add_log_entry(
+            config.api_type, config.device_id, "scheduler_started", 
+            f"スケジューラー開始: {config.interval_hours}時間間隔", "system"
+        )
+        
+        return SchedulerStatus(
+            api_type=config.api_type,
+            device_id=config.device_id,
+            enabled=config.enabled,
+            interval_hours=config.interval_hours,
+            last_run=None,
+            next_run=next_run,
+            created_at=datetime.now()
+        )
+        
+    async def stop_scheduler(self, api_type: SchedulerAPIType, device_id: str) -> bool:
+        """スケジューラーを停止"""
+        job_id = self._get_job_id(api_type, device_id)
+        
+        if job_id in self.active_jobs:
+            try:
+                self.scheduler.remove_job(job_id)
+                del self.active_jobs[job_id]
+                
+                self._add_log_entry(
+                    api_type, device_id, "scheduler_stopped", 
+                    "スケジューラー停止", "system"
+                )
+                
+                return True
+            except Exception as e:
+                self._add_log_entry(
+                    api_type, device_id, "scheduler_stop_failed", 
+                    f"スケジューラー停止エラー: {str(e)}", "system"
+                )
+                return False
+        
+        return False
+        
+    def get_scheduler_status(self, api_type: SchedulerAPIType, device_id: str) -> Optional[SchedulerStatus]:
+        """スケジューラーの状態を取得"""
+        job_id = self._get_job_id(api_type, device_id)
+        
+        if job_id in self.active_jobs:
+            job_info = self.active_jobs[job_id]
+            return SchedulerStatus(
+                api_type=job_info["api_type"],
+                device_id=job_info["device_id"],
+                enabled=job_info["enabled"],
+                interval_hours=job_info["interval_hours"],
+                last_run=job_info["last_run"],
+                next_run=job_info["next_run"],
+                created_at=job_info["created_at"]
+            )
+        
+        return None
+        
+    def get_scheduler_logs(self, api_type: SchedulerAPIType, device_id: str, limit: int = 50) -> SchedulerLogResponse:
+        """スケジューラーのログを取得"""
+        key = f"{api_type.value}_{device_id}"
+        logs = self.scheduler_logs.get(key, [])
+        
+        # 最新のログから指定数分を取得
+        recent_logs = logs[-limit:] if len(logs) > limit else logs
+        
+        return SchedulerLogResponse(
+            api_type=api_type,
+            device_id=device_id,
+            logs=recent_logs,
+            total_count=len(logs)
+        )
+        
+    def get_all_scheduler_status(self) -> List[SchedulerStatus]:
+        """すべてのスケジューラーの状態を取得"""
+        statuses = []
+        for job_id, job_info in self.active_jobs.items():
+            statuses.append(SchedulerStatus(
+                api_type=job_info["api_type"],
+                device_id=job_info["device_id"],
+                enabled=job_info["enabled"],
+                interval_hours=job_info["interval_hours"],
+                last_run=job_info["last_run"],
+                next_run=job_info["next_run"],
+                created_at=job_info["created_at"]
+            ))
+        return statuses
+
+
+# グローバルスケジューラー管理インスタンス
+scheduler_manager = APISchedulerManager()
+whisper_trial_scheduler = WhisperTrialScheduler()
 
 
 @app.get("/health")
@@ -917,12 +1366,16 @@ async def whisper_proxy(request: Request):
     device_id = body.get("device_id")
     date = body.get("date")
     model = body.get("model", "base")
+    file_paths = body.get("file_paths")  # file_pathsを追加
 
     if not device_id or not date:
         raise HTTPException(status_code=400, detail="device_idとdateは必須です")
 
     async with httpx.AsyncClient(timeout=600.0) as session:
         whisper_data = {"device_id": device_id, "date": date, "model": model}
+        if file_paths:
+            whisper_data["file_paths"] = file_paths  # file_pathsがある場合は追加
+            
         whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data=whisper_data)
         
         if whisper_result["success"]:
@@ -1160,6 +1613,106 @@ async def opensmile_aggregator_proxy(request: Request):
 async def health_check():
     """ヘルスチェック"""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+# =============================================================================
+# スケジューラーAPI エンドポイント
+# =============================================================================
+
+@app.post("/api/scheduler/start", response_model=SchedulerStatus)
+async def start_scheduler_endpoint(config: SchedulerConfig):
+    """スケジューラーを開始"""
+    try:
+        status = await scheduler_manager.start_scheduler(config)
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"スケジューラー開始エラー: {str(e)}")
+
+@app.post("/api/scheduler/stop")
+async def stop_scheduler_endpoint(api_type: SchedulerAPIType, device_id: str):
+    """スケジューラーを停止"""
+    try:
+        success = await scheduler_manager.stop_scheduler(api_type, device_id)
+        if success:
+            return {"success": True, "message": "スケジューラーが停止されました"}
+        else:
+            return {"success": False, "message": "スケジューラーが見つかりませんでした"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"スケジューラー停止エラー: {str(e)}")
+
+@app.get("/api/scheduler/status", response_model=Optional[SchedulerStatus])
+async def get_scheduler_status_endpoint(api_type: SchedulerAPIType, device_id: str):
+    """スケジューラーの状態を取得"""
+    try:
+        status = scheduler_manager.get_scheduler_status(api_type, device_id)
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"スケジューラー状態取得エラー: {str(e)}")
+
+@app.get("/api/scheduler/logs", response_model=SchedulerLogResponse)
+async def get_scheduler_logs_endpoint(api_type: SchedulerAPIType, device_id: str, limit: int = 50):
+    """スケジューラーのログを取得"""
+    try:
+        logs = scheduler_manager.get_scheduler_logs(api_type, device_id, limit)
+        return logs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"スケジューラーログ取得エラー: {str(e)}")
+
+@app.get("/api/scheduler/all-status", response_model=List[SchedulerStatus])
+async def get_all_scheduler_status_endpoint():
+    """すべてのスケジューラーの状態を取得"""
+    try:
+        statuses = scheduler_manager.get_all_scheduler_status()
+        return statuses
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"全スケジューラー状態取得エラー: {str(e)}")
+
+
+# =============================================================================
+# Whisper試験版スケジューラーAPI
+# =============================================================================
+
+@app.post("/api/whisper-trial-scheduler/start")
+async def start_whisper_trial_scheduler():
+    """Whisper試験版スケジューラーを開始"""
+    try:
+        success = whisper_trial_scheduler.start_trial_scheduler()
+        if success:
+            return {"success": True, "message": "Whisper試験スケジューラーを開始しました"}
+        else:
+            return {"success": False, "message": "スケジューラーは既に実行中です"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"スケジューラー開始エラー: {str(e)}")
+
+@app.post("/api/whisper-trial-scheduler/stop")
+async def stop_whisper_trial_scheduler():
+    """Whisper試験版スケジューラーを停止"""
+    try:
+        success = whisper_trial_scheduler.stop_trial_scheduler()
+        if success:
+            return {"success": True, "message": "Whisper試験スケジューラーを停止しました"}
+        else:
+            return {"success": False, "message": "スケジューラーは実行されていません"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"スケジューラー停止エラー: {str(e)}")
+
+@app.get("/api/whisper-trial-scheduler/status")
+async def get_whisper_trial_scheduler_status():
+    """Whisper試験版スケジューラーの状態を取得"""
+    try:
+        status = whisper_trial_scheduler.get_status()
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"スケジューラー状態取得エラー: {str(e)}")
+
+@app.post("/api/whisper-trial-scheduler/run-now")
+async def run_whisper_trial_scheduler_now():
+    """Whisper試験版スケジューラーを即座に実行"""
+    try:
+        await whisper_trial_scheduler._process_whisper_slots()
+        return {"success": True, "message": "Whisper試験処理を実行しました"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"スケジューラー実行エラー: {str(e)}")
 
 
 if __name__ == "__main__":
