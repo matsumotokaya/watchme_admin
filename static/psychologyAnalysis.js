@@ -10,10 +10,12 @@ import { showNotification } from './core.js';
 // =============================================================================
 
 export function initializePsychologyAnalysis() {
+    console.log('心理分析モジュール初期化開始...');
     initializeAllDates();
     initializeBatchProcessingDefaults();
     setupPsychologyEventListeners();
     initializeSchedulers();
+    checkWhisperAPIStatus(); // APIステータスチェックを追加
     console.log('心理分析モジュール初期化完了');
 }
 
@@ -61,10 +63,15 @@ function initializeBatchProcessingDefaults() {
 }
 
 function setupPsychologyEventListeners() {
+    console.log('心理分析イベントリスナーを設定中...');
+    
     // Whisper機能のイベントリスナー
     const startWhisperBtn = document.getElementById('start-whisper-btn');
     if (startWhisperBtn) {
+        console.log('Whisperボタンを発見、イベントリスナーを設定');
         startWhisperBtn.addEventListener('click', startWhisperProcessing);
+    } else {
+        console.error('Whisperボタン (start-whisper-btn) が見つかりません');
     }
     
     // Whisperプロンプト生成機能のイベントリスナー
@@ -518,39 +525,101 @@ async function startBehaviorBatch() {
 }
 
 // =============================================================================
+// APIステータスチェック
+// =============================================================================
+
+async function checkWhisperAPIStatus() {
+    const statusElement = document.getElementById('whisper-api-status');
+    if (!statusElement) return;
+    
+    try {
+        console.log('Whisper APIステータスを確認中...');
+        const response = await axios.get('/api/whisper/status', {
+            timeout: 5000
+        });
+        
+        const data = response.data;
+        if (data.status === 'online') {
+            statusElement.textContent = '✅ 稼働中';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800';
+            console.log('Whisper API稼働確認:', data.data);
+        } else if (data.status === 'error') {
+            statusElement.textContent = '⚠️ 応答異常';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800';
+            console.warn('Whisper APIエラー:', data.message);
+        } else {
+            statusElement.textContent = '❌ オフライン';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800';
+            console.error('Whisper APIオフライン:', data.message);
+        }
+    } catch (error) {
+        console.error('Whisper APIステータス確認エラー:', error);
+        statusElement.textContent = '❌ 接続エラー';
+        statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800';
+    }
+}
+
+// 定期的にAPIステータスをチェック（30秒ごと）
+setInterval(checkWhisperAPIStatus, 30000);
+
+// =============================================================================
 // Whisper音声文字起こし処理
 // =============================================================================
 
 async function startWhisperProcessing() {
-    const deviceId = document.getElementById('whisper-device-id').value.trim();
-    const date = document.getElementById('whisper-date').value;
+    console.log('Whisper処理開始ボタンがクリックされました');
+    
+    const filePathsTextarea = document.getElementById('whisper-file-paths');
+    if (!filePathsTextarea) {
+        console.error('whisper-file-paths要素が見つかりません');
+        showNotification('エラー: 入力フィールドが見つかりません', 'error');
+        return;
+    }
+    
+    const filePathsText = filePathsTextarea.value.trim();
     const model = 'base'; // サーバーリソースの制約により、baseモデルのみサポート
     const button = document.getElementById('start-whisper-btn');
     const statusDiv = document.getElementById('whisper-status');
     const resultsDiv = document.getElementById('whisper-results');
     const resultsContent = document.getElementById('whisper-results-content');
     
+    console.log('入力されたファイルパス:', filePathsText);
+    
     // 入力チェック
-    if (!deviceId || !date) {
-        showNotification('デバイスIDと日付を入力してください', 'error');
+    if (!filePathsText) {
+        console.log('ファイルパスが入力されていません');
+        showNotification('ファイルパスを入力してください', 'error');
         return;
     }
     
-    // UUID形式チェック
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(deviceId)) {
-        showNotification('デバイスIDはUUID形式で入力してください', 'error');
+    // ファイルパスを改行で分割して配列にする
+    const filePaths = filePathsText.split('\n')
+        .map(path => path.trim())
+        .filter(path => path.length > 0);
+    
+    console.log('処理するファイルパス配列:', filePaths);
+    
+    if (filePaths.length === 0) {
+        console.log('有効なファイルパスがありません');
+        showNotification('有効なファイルパスを入力してください', 'error');
         return;
     }
     
-    button.disabled = true;
-    button.textContent = '🔄 処理中...';
-    statusDiv.textContent = 'Whisper音声文字起こし処理を開始しています...';
-    if (resultsDiv) resultsDiv.classList.add('hidden');
-    
-    statusDiv.textContent = 'Whisper音声文字起こし処理を実行中...';
+    // UI更新
+    console.log('UI要素を更新中...');
+    if (button) {
+        button.disabled = true;
+        button.textContent = '🔄 処理中...';
+    }
+    if (statusDiv) {
+        statusDiv.textContent = 'Whisper音声文字起こし処理を開始しています...';
+    }
+    if (resultsDiv) {
+        resultsDiv.classList.add('hidden');
+    }
     
     try {
+        console.log('Whisper API処理を開始します...');
         const startTime = new Date();
         
         // APIサーバーの接続性確認
@@ -577,15 +646,14 @@ async function startWhisperProcessing() {
         console.log('Whisper APIリクエスト開始（プロキシ経由）:', {
             url: '/api/whisper/fetch-and-transcribe',
             proxy_target: 'https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe',
-            data: { device_id: deviceId, date: date, model: model }
+            data: { file_paths: filePaths, model: model }
         });
         
         const response = await axios({
             method: 'POST',
             url: '/api/whisper/fetch-and-transcribe',  // 管理画面のプロキシエンドポイント
             data: {
-                device_id: deviceId,
-                date: date,
+                file_paths: filePaths,
                 model: model  // baseモデル固定
             },
             timeout: 600000,  // 10分のタイムアウト
@@ -604,29 +672,42 @@ async function startWhisperProcessing() {
         const endTime = new Date();
         const processingTime = Math.round((endTime - startTime) / 1000);
         
+        // エラーレスポンスの詳細を確認
+        if (response.status !== 200) {
+            console.error('APIエラーレスポンス:', result);
+            throw new Error(result.detail || result.message || `APIエラー: ステータス ${response.status}`);
+        }
+        
         // 処理結果の表示
         if (result.status === 'success') {
-            statusDiv.textContent = `処理完了: ${result.processed ? result.processed.length : 0}件のファイルを処理しました`;
+            statusDiv.textContent = `処理完了: ${result.summary?.total_files || 0}件のファイルを処理しました`;
             
             if (resultsDiv && resultsContent) {
                 resultsContent.innerHTML = `
                     <div class="bg-green-50 border border-green-200 rounded-lg p-4">
                         <h4 class="font-medium text-green-900 mb-2">✅ Whisper処理結果</h4>
                         <div class="text-sm text-green-700 space-y-1">
+                            <div>リクエストファイル数: <span class="font-medium">${filePaths.length}件</span></div>
                             <div>処理ファイル数: <span class="font-medium">${result.summary?.total_files || 0}件</span></div>
-                            <div>音声取得: <span class="font-medium">${result.summary?.total_files || 0}件</span></div>
-                            <div>Supabase保存: <span class="font-medium">${result.summary?.pending_processed || 0}件</span></div>
-                            <div>スキップ: <span class="font-medium">${result.summary?.already_completed || 0}件</span></div>
+                            <div>処理成功: <span class="font-medium">${result.summary?.pending_processed || 0}件</span></div>
                             <div>エラー: <span class="font-medium">${result.summary?.errors || 0}件</span></div>
                             <div>開始時刻: <span class="font-medium">${startTime.toLocaleString('ja-JP')}</span></div>
                             <div>終了時刻: <span class="font-medium">${endTime.toLocaleString('ja-JP')}</span></div>
                             <div>処理時間: <span class="font-medium">${processingTime}秒</span></div>
                         </div>
-                        ${result.errors && result.errors.length > 0 ? `
+                        ${result.processed_files && result.processed_files.length > 0 ? `
+                            <div class="mt-3 text-sm text-green-700">
+                                <h5 class="font-medium">処理したファイル:</h5>
+                                <ul class="list-disc list-inside text-xs mt-1 max-h-32 overflow-y-auto">
+                                    ${result.processed_files.map(file => `<li>${file}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        ${result.error_files && result.error_files.length > 0 ? `
                             <div class="mt-3 text-sm text-red-700">
-                                <h5 class="font-medium">エラー詳細:</h5>
-                                <ul class="list-disc list-inside">
-                                    ${result.errors.map(err => `<li>${err}</li>`).join('')}
+                                <h5 class="font-medium">エラーファイル:</h5>
+                                <ul class="list-disc list-inside text-xs mt-1">
+                                    ${result.error_files.map(file => `<li>${file}</li>`).join('')}
                                 </ul>
                             </div>
                         ` : ''}
@@ -649,6 +730,11 @@ async function startWhisperProcessing() {
             status: error.response?.status,
             stack: error.stack
         });
+        
+        // エラーが発生した場合でも必ずUIに表示する
+        if (!statusDiv) {
+            alert(`Whisper処理エラー: ${error.message}`);
+        }
         
         let errorMessage;
         let errorDetails = '';
@@ -686,14 +772,17 @@ async function startWhisperProcessing() {
                 </div>
             `;
         } else {
-            errorMessage = error.response?.data?.detail || error.message || 'Whisper処理に失敗しました';
+            errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message || 'Whisper処理に失敗しました';
             if (error.response?.status) {
                 errorDetails = `HTTPステータス: ${error.response.status}`;
+            }
+            if (error.response?.data) {
+                errorDetails += `\nレスポンス: ${JSON.stringify(error.response.data, null, 2)}`;
             }
             statusDiv.innerHTML = `
                 <div class="text-red-600">
                     <span>❌ エラー: ${errorMessage}</span>
-                    ${errorDetails ? `<div class="text-sm mt-1">${errorDetails}</div>` : ''}
+                    ${errorDetails ? `<div class="text-sm mt-1 whitespace-pre-wrap font-mono bg-red-50 p-2 rounded">${errorDetails}</div>` : ''}
                 </div>
             `;
         }
@@ -710,8 +799,11 @@ async function startWhisperProcessing() {
             resultsDiv.classList.remove('hidden');
         }
     } finally {
-        button.disabled = false;
-        button.textContent = '🎤 Whisper処理開始';
+        console.log('Whisper処理完了（finally節）');
+        if (button) {
+            button.disabled = false;
+            button.textContent = '🎤 Whisper処理開始';
+        }
     }
 }
 
@@ -1157,7 +1249,7 @@ function initializeWhisperTrialScheduler() {
     
     // イベントリスナーを設定
     const whisperTrialToggle = document.getElementById('whisper-trial-scheduler-toggle');
-    const runNowBtn = document.getElementById('whisper-trial-run-now-btn');
+    const process24HoursBtn = document.getElementById('whisper-process-24hours-btn');
     
     if (whisperTrialToggle) {
         whisperTrialToggle.addEventListener('change', async (e) => {
@@ -1165,9 +1257,9 @@ function initializeWhisperTrialScheduler() {
         });
     }
     
-    if (runNowBtn) {
-        runNowBtn.addEventListener('click', async () => {
-            await runWhisperTrialSchedulerNow();
+    if (process24HoursBtn) {
+        process24HoursBtn.addEventListener('click', async () => {
+            await processWhisper24Hours();
         });
     }
     
@@ -1501,6 +1593,42 @@ async function runWhisperTrialSchedulerNow() {
         if (button) {
             button.disabled = false;
             button.textContent = '今すぐ実行';
+        }
+    }
+}
+
+async function processWhisper24Hours() {
+    try {
+        const button = document.getElementById('whisper-process-24hours-btn');
+        if (button) {
+            button.disabled = true;
+            button.textContent = '処理中...';
+        }
+        
+        showNotification('過去24時間分の処理を開始します', 'info');
+        
+        // 過去24時間分を処理するAPIを呼び出す（既存のrun-nowエンドポイントを使用）
+        const response = await axios.post('/api/whisper-trial-scheduler/run-now');
+        
+        if (response.data.success) {
+            showNotification('過去24時間分の処理を開始しました', 'success');
+        } else {
+            showNotification('処理の開始に失敗しました', 'error');
+        }
+        
+        // 状態を更新
+        setTimeout(() => {
+            updateWhisperTrialSchedulerStatus();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('過去24時間分処理エラー:', error);
+        showNotification('処理の開始に失敗しました', 'error');
+    } finally {
+        const button = document.getElementById('whisper-process-24hours-btn');
+        if (button) {
+            button.disabled = false;
+            button.textContent = '過去24時間分を処理';
         }
     }
 }

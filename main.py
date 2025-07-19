@@ -117,6 +117,43 @@ class WhisperTrialScheduler:
             self._add_log("error", f"スケジューラー停止に失敗: {str(e)}")
             return False
             
+    def _generate_file_paths_for_24hours(self, device_id: str) -> List[Dict[str, str]]:
+        """過去24時間分（48スロット）のファイルパスを機械的に生成"""
+        file_paths = []
+        now = datetime.now()
+        
+        # 現在のタイムブロックを計算（30分単位）
+        current_minute = now.minute
+        if current_minute < 30:
+            base_minute = 0
+        else:
+            base_minute = 30
+        
+        # 基準点は現在のタイムブロックの1つ前
+        base_time = now.replace(minute=base_minute, second=0, microsecond=0)
+        if base_minute == 0:
+            base_time = base_time - timedelta(minutes=30)
+        else:
+            base_time = base_time.replace(minute=0)
+        
+        self._add_log("info", f"🕐 基準時刻: {base_time.strftime('%Y-%m-%d %H:%M')}")
+        
+        # 48スロット分のファイルパスを生成（30分ずつ遡る）
+        for i in range(48):
+            slot_time = base_time - timedelta(minutes=30 * i)
+            date_str = slot_time.strftime('%Y-%m-%d')
+            time_block = slot_time.strftime('%H-%M')
+            
+            file_path = f"files/{device_id}/{date_str}/{time_block}/audio.wav"
+            file_paths.append({
+                'file_path': file_path,
+                'date': date_str,
+                'time_block': time_block,
+                'recorded_at': slot_time.isoformat()
+            })
+        
+        return file_paths
+    
     async def _process_whisper_slots(self):
         """24時間前から現在までの未処理音声を処理"""
         start_time = datetime.now()
@@ -126,127 +163,81 @@ class WhisperTrialScheduler:
             # デフォルトデバイスID
             device_id = "d067d407-cf73-4174-a9c1-d91fb60d64d0"
             
-            # 現在時刻と24時間前を計算
-            now = datetime.now()
-            yesterday = now - timedelta(hours=24)
+            # 過去24時間分のファイルパスを生成
+            all_possible_files = self._generate_file_paths_for_24hours(device_id)
+            self._add_log("info", f"📋 48スロット分のファイルパスを生成しました")
             
-            # 処理範囲を明確にログ出力
-            self._add_log("info", f"📅 処理対象期間: {yesterday.strftime('%Y-%m-%d %H:%M:%S')} 〜 {now.strftime('%Y-%m-%d %H:%M:%S')}")
-            self._add_log("info", f"⏰ 現在時刻: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-            
-            # audio_filesテーブルから未処理ファイルを確認
+            # データベースと突き合わせ
             supabase_client = get_supabase_client()
+            pending_file_paths = []
             
-            # 24時間以内のaudio_filesを取得（手動でフィルタリング）
-            all_audio_files = await supabase_client.select(
-                "audio_files",
-                filters={"device_id": device_id}
-            )
+            self._add_log("info", "🔍 データベースとの突き合わせを開始...")
             
-            # 24時間以内かつtranscriptions_status='pending'のファイルをフィルタ
-            pending_files = []
-            for file in all_audio_files:
-                recorded_at = datetime.fromisoformat(file['recorded_at'].replace('+00:00', '').replace('Z', ''))
-                if recorded_at >= yesterday and recorded_at <= now and file.get('transcriptions_status') == 'pending':
-                    pending_files.append(file)
+            # 各ファイルパスについてデータベースを確認
+            for file_info in all_possible_files:
+                file_path = file_info['file_path']
+                date_str = file_info['date']
+                time_block = file_info['time_block']
+                
+                # audio_filesテーブルから該当レコードを検索
+                result = await supabase_client.select(
+                    "audio_files",
+                    filters={
+                        "device_id": device_id,
+                        "file_path": file_path
+                    }
+                )
+                
+                if result and len(result) > 0:
+                    record = result[0]
+                    # pendingステータスの場合のみ処理対象に追加
+                    if record.get('transcriptions_status') == 'pending':
+                        pending_file_paths.append(file_path)
+                        self._add_log("info", f"  ✅ {time_block} - pending状態、処理対象に追加")
+                    else:
+                        self._add_log("info", f"  ⏭️ {time_block} - {record.get('transcriptions_status', 'unknown')}、スキップ")
+                else:
+                    self._add_log("info", f"  ❌ {time_block} - レコードなし、スキップ")
             
-            # どの時間範囲のデータを検索したかを明確にログ出力
-            self._add_log("info", f"🔍 検索条件: device_id={device_id[:8]}..., recorded_at={yesterday.strftime('%Y-%m-%d %H:%M')}〜{now.strftime('%Y-%m-%d %H:%M')}")
-            self._add_log("info", f"📋 audio_filesテーブル確認: {len(pending_files)}件の未処理ファイルを検出")
+            self._add_log("info", f"📊 突き合わせ結果: {len(pending_file_paths)}件のpendingファイルを検出")
             
-            # 処理対象の日付を取得
-            dates_to_process = set()
-            for file in pending_files:
-                date = file['recorded_at'].split('T')[0]
-                dates_to_process.add(date)
-            
-            dates_to_process = sorted(list(dates_to_process))
-            
-            if not dates_to_process:
-                self._add_log("info", f"ℹ️ 処理対象のファイルがありません（{yesterday.strftime('%Y-%m-%d %H:%M')}〜{now.strftime('%Y-%m-%d %H:%M')}の期間内）")
+            if not pending_file_paths:
+                self._add_log("info", "ℹ️ 処理対象のファイルがありません（すべて処理済みまたはレコードなし）")
                 return
             
-            # 処理対象の日付をログ出力
-            self._add_log("info", f"📆 処理対象の日付: {', '.join(dates_to_process)}")
+            # Whisper APIに処理を依頼
+            self._add_log("info", f"🎤 Whisper APIに{len(pending_file_paths)}件のファイルを送信...")
             
-            total_transcribed = 0
-            total_errors = 0
-            
-            # 各日付を処理
-            for date in dates_to_process:
-                try:
-                    # この日付の未処理ファイルとfile_pathを取得
-                    date_files = [f for f in pending_files if f['recorded_at'].startswith(date)]
-                    file_paths = [f['file_path'] for f in date_files]
-                    
-                    self._add_log("info", f"📆 {date} の処理を開始... (未処理: {len(date_files)}件)")
-                    
-                    # file_pathの詳細をログに記録
-                    for file_path in file_paths:
-                        time_block = file_path.split('/')[-2] if '/' in file_path else 'unknown'
-                        self._add_log("info", f"  📁 {time_block} のファイルを処理対象に追加")
-                    
-                    async with httpx.AsyncClient(timeout=600) as client:
-                        url = "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe"
-                        payload = {
-                            "file_paths": file_paths,  # file_pathリストのみ送信
-                            "model": "base"
-                        }
-                        
-                        response = await client.post(url, json=payload)
-                        
-                        if response.status_code == 200:
-                            result = response.json()
-                            summary = result.get("summary", {})
-                            
-                            # デバッグ用: APIレスポンス全体をログに記録
-                            import json
-                            self._add_log("info", f"📊 API Response: {json.dumps(result, ensure_ascii=False, indent=2)}")
-                            
-                            # 処理結果をログに記録
-                            # Whisper APIの新しいレスポンス形式に合わせて修正
-                            transcribed = summary.get("pending_processed", 0)
-                            errors = summary.get("errors", 0)
-                            total_files = summary.get("total_files", 0)
-                            execution_time = result.get("execution_time_seconds", 0)
-                            
-                            total_transcribed += transcribed
-                            total_errors += errors
-                            
-                            if transcribed > 0:
-                                self._add_log("success", 
-                                    f"✅ {date}: {transcribed}件の新規文字起こし完了 "
-                                    f"(対象: {total_files}件, "
-                                    f"実行時間: {execution_time:.1f}秒)")
-                            else:
-                                self._add_log("info", 
-                                    f"ℹ️ {date}: 新規処理なし "
-                                    f"(対象: {total_files}件)")
-                                    
-                        else:
-                            self._add_log("error", f"❌ {date}: APIエラー (status: {response.status_code})")
-                            total_errors += 1
-                            
-                except Exception as e:
-                    self._add_log("error", f"❌ {date} の処理中にエラー: {str(e)}")
-                    total_errors += 1
-                    
-                # 処理間隔を空ける（次の日付がある場合のみ）
-                if date != dates_to_process[-1]:
-                    await asyncio.sleep(2)
+            async with httpx.AsyncClient(timeout=600) as client:
+                url = "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe"
+                payload = {
+                    "file_paths": pending_file_paths,
+                    "model": "base"
+                }
                 
-            # 全体の処理結果をまとめて記録
-            duration = (datetime.now() - start_time).total_seconds()
+                response = await client.post(url, json=payload)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    summary = result.get("summary", {})
+                    
+                    # 処理結果をログに記録
+                    processed = summary.get("pending_processed", 0)
+                    errors = summary.get("errors", 0)
+                    
+                    self._add_log("success", f"✅ Whisper処理完了: {processed}件を処理、{errors}件のエラー")
+                    
+                    if result.get("processed_files"):
+                        for file_path in result["processed_files"]:
+                            time_block = file_path.split('/')[-2] if '/' in file_path else 'unknown'
+                            self._add_log("info", f"  ✅ {time_block} - 文字起こし完了")
+                else:
+                    self._add_log("error", f"❌ Whisper API エラー: ステータス {response.status_code}")
+                    self._add_log("error", f"Response: {response.text}")
             
-            if total_transcribed > 0 or total_errors == 0:
-                self._add_log("success", 
-                    f"🎉 処理完了 (24時間分): "
-                    f"新規文字起こし {total_transcribed}件 "
-                    f"(実行時間: {duration:.1f}秒)")
-            else:
-                self._add_log("warning", 
-                    f"⚠️ 処理完了: エラー {total_errors}件発生 "
-                    f"(実行時間: {duration:.1f}秒)")
+            # 処理完了
+            duration = (datetime.now() - start_time).total_seconds()
+            self._add_log("success", f"🎉 Whisper自動処理完了 (実行時間: {duration:.1f}秒)")
                     
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
@@ -1364,25 +1355,42 @@ async def batch_whisper_step(request: Request):
 async def whisper_proxy(request: Request):
     """Whisper APIへのプロキシエンドポイント（CORS回避用）"""
     body = await request.json()
+    file_paths = body.get("file_paths")
+    model = body.get("model", "base")
+    
+    # 旧形式との互換性を保持
     device_id = body.get("device_id")
     date = body.get("date")
-    model = body.get("model", "base")
-    file_paths = body.get("file_paths")  # file_pathsを追加
 
-    if not device_id or not date:
-        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+    # file_pathsが指定されている場合は新形式
+    if file_paths:
+        whisper_data = {"file_paths": file_paths, "model": model}
+    # device_idとdateが指定されている場合は旧形式
+    elif device_id and date:
+        whisper_data = {"device_id": device_id, "date": date, "model": model}
+    else:
+        raise HTTPException(status_code=400, detail="file_pathsまたはdevice_idとdateのいずれかが必須です")
 
     async with httpx.AsyncClient(timeout=600.0) as session:
-        whisper_data = {"device_id": device_id, "date": date, "model": model}
-        if file_paths:
-            whisper_data["file_paths"] = file_paths  # file_pathsがある場合は追加
-            
         whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data=whisper_data)
         
         if whisper_result["success"]:
             return whisper_result.get("data", {})
         else:
             raise HTTPException(status_code=500, detail=whisper_result.get("message", "Whisper処理に失敗しました"))
+
+@app.get("/api/whisper/status")
+async def whisper_status_proxy():
+    """Whisper APIのステータス確認エンドポイント"""
+    async with httpx.AsyncClient(timeout=10.0) as session:
+        try:
+            response = await session.get("https://api.hey-watch.me/vibe-transcriber/")
+            if response.status_code == 200:
+                return {"status": "online", "data": response.json()}
+            else:
+                return {"status": "error", "message": f"API responded with status {response.status_code}"}
+        except Exception as e:
+            return {"status": "offline", "message": str(e)}
 
 @app.get("/api/prompt/generate-mood-prompt-supabase")
 async def prompt_proxy(device_id: str, date: str):
