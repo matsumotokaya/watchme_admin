@@ -128,10 +128,10 @@ class WhisperTrialScheduler:
             
             # 現在時刻と24時間前を計算
             now = datetime.now()
-            start_time_utc = (now - timedelta(hours=24)).isoformat() + "+00:00"
-            end_time_utc = now.isoformat() + "+00:00"
+            yesterday = now - timedelta(hours=24)
             
-            self._add_log("info", f"📅 処理対象期間: 過去24時間")
+            # 処理範囲を明確にログ出力
+            self._add_log("info", f"📅 処理対象期間: {yesterday.strftime('%Y-%m-%d %H:%M:%S')} 〜 {now.strftime('%Y-%m-%d %H:%M:%S')}")
             self._add_log("info", f"⏰ 現在時刻: {now.strftime('%Y-%m-%d %H:%M:%S')}")
             
             # audio_filesテーブルから未処理ファイルを確認
@@ -143,13 +143,15 @@ class WhisperTrialScheduler:
                 filters={"device_id": device_id}
             )
             
-            # 24時間以内かつwhisper_status='pending'のファイルをフィルタ
+            # 24時間以内かつtranscriptions_status='pending'のファイルをフィルタ
             pending_files = []
             for file in all_audio_files:
-                recorded_at = datetime.fromisoformat(file['recorded_at'].replace('+00:00', ''))
-                if recorded_at >= (now - timedelta(hours=24)) and file.get('whisper_status') == 'pending':
+                recorded_at = datetime.fromisoformat(file['recorded_at'].replace('+00:00', '').replace('Z', ''))
+                if recorded_at >= yesterday and recorded_at <= now and file.get('transcriptions_status') == 'pending':
                     pending_files.append(file)
             
+            # どの時間範囲のデータを検索したかを明確にログ出力
+            self._add_log("info", f"🔍 検索条件: device_id={device_id[:8]}..., recorded_at={yesterday.strftime('%Y-%m-%d %H:%M')}〜{now.strftime('%Y-%m-%d %H:%M')}")
             self._add_log("info", f"📋 audio_filesテーブル確認: {len(pending_files)}件の未処理ファイルを検出")
             
             # 処理対象の日付を取得
@@ -161,12 +163,13 @@ class WhisperTrialScheduler:
             dates_to_process = sorted(list(dates_to_process))
             
             if not dates_to_process:
-                self._add_log("info", "ℹ️ 処理対象のファイルがありません")
+                self._add_log("info", f"ℹ️ 処理対象のファイルがありません（{yesterday.strftime('%Y-%m-%d %H:%M')}〜{now.strftime('%Y-%m-%d %H:%M')}の期間内）")
                 return
             
+            # 処理対象の日付をログ出力
+            self._add_log("info", f"📆 処理対象の日付: {', '.join(dates_to_process)}")
+            
             total_transcribed = 0
-            total_skipped_db = 0
-            total_skipped_no_audio = 0
             total_errors = 0
             
             # 各日付を処理
@@ -186,10 +189,8 @@ class WhisperTrialScheduler:
                     async with httpx.AsyncClient(timeout=600) as client:
                         url = "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe"
                         payload = {
-                            "device_id": device_id,
-                            "date": date,
-                            "model": "base",
-                            "file_paths": file_paths  # file_pathリストを追加
+                            "file_paths": file_paths,  # file_pathリストのみ送信
+                            "model": "base"
                         }
                         
                         response = await client.post(url, json=payload)
@@ -198,27 +199,29 @@ class WhisperTrialScheduler:
                             result = response.json()
                             summary = result.get("summary", {})
                             
+                            # デバッグ用: APIレスポンス全体をログに記録
+                            import json
+                            self._add_log("info", f"📊 API Response: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                            
                             # 処理結果をログに記録
-                            transcribed = summary.get("successfully_transcribed", 0)
-                            skipped_db = summary.get("skipped_as_processed_in_db", 0)
-                            skipped_no_audio = summary.get("skipped_as_no_audio_in_s3", 0)
+                            # Whisper APIの新しいレスポンス形式に合わせて修正
+                            transcribed = summary.get("pending_processed", 0)
                             errors = summary.get("errors", 0)
+                            total_files = summary.get("total_files", 0)
                             execution_time = result.get("execution_time_seconds", 0)
                             
                             total_transcribed += transcribed
-                            total_skipped_db += skipped_db
-                            total_skipped_no_audio += skipped_no_audio
                             total_errors += errors
                             
                             if transcribed > 0:
                                 self._add_log("success", 
                                     f"✅ {date}: {transcribed}件の新規文字起こし完了 "
-                                    f"(処理済み: {skipped_db}件, 音声なし: {skipped_no_audio}件, "
+                                    f"(対象: {total_files}件, "
                                     f"実行時間: {execution_time:.1f}秒)")
                             else:
                                 self._add_log("info", 
                                     f"ℹ️ {date}: 新規処理なし "
-                                    f"(処理済み: {skipped_db}件, 音声なし: {skipped_no_audio}件)")
+                                    f"(対象: {total_files}件)")
                                     
                         else:
                             self._add_log("error", f"❌ {date}: APIエラー (status: {response.status_code})")
@@ -238,9 +241,7 @@ class WhisperTrialScheduler:
             if total_transcribed > 0 or total_errors == 0:
                 self._add_log("success", 
                     f"🎉 処理完了 (24時間分): "
-                    f"新規文字起こし {total_transcribed}件, "
-                    f"処理済みスキップ {total_skipped_db}件, "
-                    f"音声なしスキップ {total_skipped_no_audio}件 "
+                    f"新規文字起こし {total_transcribed}件 "
                     f"(実行時間: {duration:.1f}秒)")
             else:
                 self._add_log("warning", 

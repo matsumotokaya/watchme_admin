@@ -613,11 +613,11 @@ async function startWhisperProcessing() {
                     <div class="bg-green-50 border border-green-200 rounded-lg p-4">
                         <h4 class="font-medium text-green-900 mb-2">✅ Whisper処理結果</h4>
                         <div class="text-sm text-green-700 space-y-1">
-                            <div>処理ファイル数: <span class="font-medium">${result.summary.total_time_blocks}件</span></div>
-                            <div>音声取得: <span class="font-medium">${result.summary.audio_fetched}件</span></div>
-                            <div>Supabase保存: <span class="font-medium">${result.summary.supabase_saved}件</span></div>
-                            <div>スキップ: <span class="font-medium">${result.summary.skipped_existing}件</span></div>
-                            <div>エラー: <span class="font-medium">${result.summary.errors}件</span></div>
+                            <div>処理ファイル数: <span class="font-medium">${result.summary?.total_files || 0}件</span></div>
+                            <div>音声取得: <span class="font-medium">${result.summary?.total_files || 0}件</span></div>
+                            <div>Supabase保存: <span class="font-medium">${result.summary?.pending_processed || 0}件</span></div>
+                            <div>スキップ: <span class="font-medium">${result.summary?.already_completed || 0}件</span></div>
+                            <div>エラー: <span class="font-medium">${result.summary?.errors || 0}件</span></div>
                             <div>開始時刻: <span class="font-medium">${startTime.toLocaleString('ja-JP')}</span></div>
                             <div>終了時刻: <span class="font-medium">${endTime.toLocaleString('ja-JP')}</span></div>
                             <div>処理時間: <span class="font-medium">${processingTime}秒</span></div>
