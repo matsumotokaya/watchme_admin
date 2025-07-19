@@ -1083,7 +1083,7 @@ API_ENDPOINTS = {
     "chatgpt": "https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase",
     "sed": "https://api.hey-watch.me/behavior-features/fetch-and-process",
     "sed_aggregator": "https://api.hey-watch.me/behavior-aggregator/analysis/sed",
-    "opensmile": "https://api.hey-watch.me/emotion-features/process/vault-data",
+    "opensmile": "https://api.hey-watch.me/emotion-features/process/emotion-features",
     "opensmile_aggregator": "https://api.hey-watch.me/emotion-aggregator/analyze/opensmile-aggregator"
 }
 
@@ -1502,24 +1502,65 @@ async def sed_aggregator_proxy(request: Request):
         else:
             raise HTTPException(status_code=500, detail=aggregator_result.get("message", "SED Aggregator処理に失敗しました"))
 
-@app.post("/api/opensmile/process/vault-data")
+@app.post("/api/opensmile/process/emotion-features")
 async def opensmile_proxy(request: Request):
-    """OpenSMILE音声特徴量抽出APIへのプロキシエンドポイント（CORS回避用）"""
+    """OpenSMILE音声特徴量抽出APIへのプロキシエンドポイント（CORS回避用、file_pathsベース）"""
     body = await request.json()
+    file_paths = body.get("file_paths")
+    feature_set = body.get("feature_set", "eGeMAPSv02")
+    include_raw_features = body.get("include_raw_features", False)
+    
+    # 旧形式との互換性を保持
     device_id = body.get("device_id")
     date = body.get("date")
-
-    if not device_id or not date:
-        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+    
+    # file_pathsが指定されている場合は新形式
+    if file_paths:
+        opensmile_data = {
+            "file_paths": file_paths,
+            "feature_set": feature_set,
+            "include_raw_features": include_raw_features
+        }
+    # device_idとdateが指定されている場合は旧形式（廃止予定）
+    elif device_id and date:
+        raise HTTPException(status_code=400, detail="device_id/date指定は廃止されました。file_pathsを指定してください")
+    else:
+        raise HTTPException(status_code=400, detail="file_pathsは必須です")
 
     async with httpx.AsyncClient(timeout=300.0) as session:
-        opensmile_data = {"device_id": device_id, "date": date}
         opensmile_result = await call_api(session, "OpenSMILE音声特徴量抽出", API_ENDPOINTS["opensmile"], json_data=opensmile_data)
         
         if opensmile_result["success"]:
             return opensmile_result.get("data", {})
         else:
             raise HTTPException(status_code=500, detail=opensmile_result.get("message", "OpenSMILE処理に失敗しました"))
+
+@app.get("/api/opensmile/status")
+async def opensmile_status():
+    """OpenSMILE APIのステータス確認エンドポイント"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as session:
+            # OpenSMILE APIのヘルスチェック
+            health_url = "https://api.hey-watch.me/emotion-features/health"
+            response = await session.get(health_url)
+            
+            if response.status_code == 200:
+                health_data = response.json()
+                return {
+                    "status": "online",
+                    "message": f"OpenSMILE API稼働中 (v{health_data.get('version', 'unknown')})",
+                    "data": health_data
+                }
+            else:
+                return {
+                    "status": "error", 
+                    "message": f"ヘルスチェック異常: HTTP {response.status_code}"
+                }
+    except Exception as e:
+        return {
+            "status": "offline",
+            "message": f"接続失敗: {str(e)}"
+        }
 
 @app.post("/api/opensmile/aggregate-features")
 async def opensmile_aggregator_proxy(request: Request):

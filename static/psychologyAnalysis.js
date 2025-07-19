@@ -1135,42 +1135,141 @@ async function startSEDAggregatorProcessing() {
 }
 
 // =============================================================================
+// OpenSMILE API ステータスチェック
+// =============================================================================
+
+async function checkOpenSMILEAPIStatus() {
+    const statusElement = document.getElementById('opensmile-api-status');
+    if (!statusElement) return;
+
+    try {
+        const response = await axios.get('/api/opensmile/status', { timeout: 10000 });
+        
+        const data = response.data;
+        if (data.status === 'online') {
+            statusElement.textContent = '✅ 稼働中';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800';
+            console.log('OpenSMILE API稼働確認:', data.data);
+        } else if (data.status === 'error') {
+            statusElement.textContent = '⚠️ 応答異常';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800';
+            console.warn('OpenSMILE APIエラー:', data.message);
+        } else {
+            statusElement.textContent = '❌ オフライン';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800';
+            console.error('OpenSMILE APIオフライン:', data.message);
+        }
+    } catch (error) {
+        console.error('OpenSMILE APIステータス確認エラー:', error);
+        statusElement.textContent = '❌ 接続エラー';
+        statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800';
+    }
+}
+
+// 定期的にAPIステータスをチェック（30秒ごと）
+setInterval(checkOpenSMILEAPIStatus, 30000);
+
+// =============================================================================
 // OpenSMILE処理
 // =============================================================================
 
 async function startOpenSMILEProcessing() {
-    const deviceId = document.getElementById('opensmile-device-id').value;
-    const date = document.getElementById('opensmile-date').value;
-    const button = document.getElementById('start-opensmile-btn');
-    const statusDiv = document.getElementById('opensmile-status');
+    console.log('OpenSMILE処理開始ボタンがクリックされました');
     
-    if (!deviceId || !date) {
-        showNotification('デバイスIDと日付を入力してください', 'error');
+    const filePathsTextarea = document.getElementById('opensmile-file-paths');
+    if (!filePathsTextarea) {
+        console.error('opensmile-file-paths要素が見つかりません');
+        showNotification('エラー: 入力フィールドが見つかりません', 'error');
         return;
     }
     
+    const filePathsText = filePathsTextarea.value.trim();
+    const featureSet = document.getElementById('opensmile-feature-set').value || 'eGeMAPSv02';
+    const includeRaw = document.getElementById('opensmile-include-raw').value === 'true';
+    const button = document.getElementById('start-opensmile-btn');
+    const statusDiv = document.getElementById('opensmile-status');
+    const resultsDiv = document.getElementById('opensmile-results');
+    const resultsContent = document.getElementById('opensmile-results-content');
+    
+    console.log('入力されたファイルパス:', filePathsText);
+    
+    // 入力チェック
+    if (!filePathsText) {
+        console.log('ファイルパスが入力されていません');
+        showNotification('ファイルパスを入力してください', 'error');
+        return;
+    }
+    
+    // ファイルパスを改行で分割して配列にする
+    const filePaths = filePathsText.split('\n')
+        .map(path => path.trim())
+        .filter(path => path.length > 0);
+    
+    console.log('処理するファイルパス配列:', filePaths);
+    
+    if (filePaths.length === 0) {
+        console.log('有効なファイルパスがありません');
+        showNotification('有効なファイルパスを入力してください', 'error');
+        return;
+    }
+    
+    // UI更新
+    console.log('UI要素を更新中...');
     button.disabled = true;
     button.textContent = '🔄 処理中...';
     statusDiv.textContent = 'OpenSMILE特徴量抽出処理を開始しています...';
     
+    // 結果エリアをクリア
+    if (resultsDiv && resultsContent) {
+        resultsDiv.classList.add('hidden');
+        resultsContent.textContent = '';
+    }
+    
     try {
-        const response = await axios.post('/api/opensmile/process/vault-data', {
-            device_id: deviceId,
-            date: date
+        console.log('API呼び出し開始...');
+        const response = await axios({
+            method: 'POST',
+            url: '/api/opensmile/process/emotion-features',
+            data: {
+                file_paths: filePaths,
+                feature_set: featureSet,
+                include_raw_features: includeRaw
+            },
+            timeout: 300000 // 5分タイムアウト
         });
         
+        console.log('API呼び出し完了:', response.data);
+        
         const data = response.data;
-        statusDiv.textContent = `OpenSMILE処理完了: ${data.processed_count}件のファイルを処理しました`;
-        showNotification(`OpenSMILE処理が完了しました（${data.processed_count}件処理）`, 'success');
+        const processedCount = data.processed_files || 0;
+        const totalProcessingTime = data.total_processing_time ? data.total_processing_time.toFixed(2) : '不明';
+        
+        statusDiv.textContent = `OpenSMILE処理完了: ${processedCount}件のファイルを処理しました（処理時間: ${totalProcessingTime}秒）`;
+        showNotification(`OpenSMILE処理が完了しました（${processedCount}件処理）`, 'success');
+        
+        // 結果を表示
+        if (resultsDiv && resultsContent) {
+            resultsContent.textContent = JSON.stringify(data, null, 2);
+            resultsDiv.classList.remove('hidden');
+        }
+        
+        console.log('処理完了');
         
     } catch (error) {
         console.error('OpenSMILE処理エラー:', error);
         const errorMessage = error.response?.data?.detail || error.message || 'OpenSMILE処理に失敗しました';
         statusDiv.textContent = `エラー: ${errorMessage}`;
         showNotification(errorMessage, 'error');
+        
+        // エラー詳細も表示
+        if (resultsDiv && resultsContent) {
+            resultsContent.textContent = `エラー詳細:\n${JSON.stringify(error.response?.data || error.message, null, 2)}`;
+            resultsDiv.classList.remove('hidden');
+        }
     } finally {
         button.disabled = false;
-        button.textContent = '🎵 OpenSMILE処理';
+        button.textContent = '🎵 OpenSMILE処理開始';
+        console.log('処理終了、UI復元完了');
     }
 }
 

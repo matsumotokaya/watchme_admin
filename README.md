@@ -18,7 +18,7 @@ FastAPIとSupabaseを使用したデバイス・ユーザー管理システム�
 - 📊 **SED Aggregator** → `https://api.hey-watch.me/behavior-aggregator/analysis/sed`
 
 **感情グラフタブ** - 以下機能は本番マイクロサービスAPIに接続済み：
-- 🎵 **OpenSMILE音声特徴量抽出** → `https://api.hey-watch.me/emotion-features/process/vault-data`
+- 🎵 **OpenSMILE音声特徴量抽出** → `https://api.hey-watch.me/emotion-features/process/emotion-features` ✨ **NEW: Whisper APIパターン準拠**
 - 📊 **OpenSMILE Aggregator（感情集計）** → `https://api.hey-watch.me/emotion-aggregator/analyze/opensmile-aggregator`
 
 ### 🎯 設計思想
@@ -31,7 +31,60 @@ FastAPIとSupabaseを使用したデバイス・ユーザー管理システム�
 - **理由**：マイクロサービスは独立したシステムであり、開発環境にローカルAPIは存在しない
 - **確認方法**：各機能のタイトル下に表示されているURLが実際の参照先
 
-## 🔄 最新アップデート (2025-07-20)
+## 🔄 最新アップデート (2025-07-19)
+
+### 🎵 OpenSMILE音声特徴量抽出のWhisper APIパターン準拠 ✨
+
+#### 🚀 管理画面の統一されたインターフェース実現
+
+OpenSMILE音声特徴量抽出機能を**Whisper API v2.0.0のパターンに完全準拠**させ、管理画面での音声処理APIの統一化を実現しました。
+
+##### 📈 主要な変更内容
+
+1. **エンドポイント刷新**
+   ```diff
+   - POST /process/vault-data (device_id/date指定)
+   + POST /process/emotion-features (file_paths配列指定)
+   ```
+
+2. **統一されたUI設計**
+   - **Whisperセクションと同じインターフェース**: ファイルパス入力、APIステータス表示、結果表示
+   - **リアルタイムAPIステータス**: 30秒間隔での稼働状況確認（✅稼働中 / ❌オフライン）
+   - **複数ファイル対応**: 改行区切りでの複数ファイルパス処理
+
+3. **file_pathsベースの処理フロー**
+   ```javascript
+   // 新しい処理方式
+   const filePaths = filePathsText.split('\n')
+       .map(path => path.trim())
+       .filter(path => path.length > 0);
+   
+   await axios.post('/api/opensmile/process/emotion-features', {
+       file_paths: filePaths,
+       feature_set: "eGeMAPSv02",
+       include_raw_features: false
+   });
+   ```
+
+4. **本番API連携強化**
+   - **エンドポイント**: `https://api.hey-watch.me/emotion-features/process/emotion-features`
+   - **バージョン**: OpenSMILE API v2.0.0 (Whisper APIパターン準拠)
+   - **S3直接アクセス**: AWS S3から直接音声ファイルを取得
+   - **ステータス管理**: `audio_files.emotion_features_status`の確実な更新
+
+##### ✅ 実現した統一性
+
+**感情グラフタブの音声処理API（Whisper + OpenSMILE）が同じインターフェースパターンで統一**:
+- 📝 **ファイルパス入力**: 複数行テキストエリアでの直感的操作
+- 🟢 **APIステータス**: リアルタイム稼働状況の視覚的確認
+- 📊 **処理結果**: 統一されたレスポンス表示とエラーハンドリング
+- ⚡ **高速処理**: S3直接アクセスによるパフォーマンス向上
+
+##### 🎯 開発効率の向上
+
+- **学習コスト削減**: Whisperと同じ操作方法でOpenSMILEも利用可能
+- **保守性向上**: 統一されたコードパターンで保守が容易
+- **拡張性確保**: 他の音声処理APIも同じパターンで実装可能
 
 ### 🎤 Whisper音声文字起こし機能の大幅改善（他API処理のお手本実装）
 

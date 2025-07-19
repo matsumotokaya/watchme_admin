@@ -481,18 +481,37 @@
                         <div class="mt-8">
                             <div class="bg-green-50 border border-green-200 rounded-lg p-6">
                                 <h3 class="text-lg font-medium text-green-900 mb-4">🎵 OpenSMILE音声特徴量抽出</h3>
-                                <p class="text-sm text-green-700 mb-4">指定したデバイスIDと日付の音声データから感情特徴量を抽出して、Supabaseに保存します。</p>
+                                <div class="text-xs text-green-600 mb-2">
+                                    <span class="font-mono bg-green-100 px-2 py-1 rounded">https://api.hey-watch.me/emotion-features/process/emotion-features</span>
+                                    <span id="opensmile-api-status" class="ml-2 px-2 py-1 rounded text-xs font-medium">
+                                        ⏳ 確認中...
+                                    </span>
+                                </div>
+                                <p class="text-sm text-green-700 mb-4">指定したファイルパスの音声データから感情特徴量を抽出して、Supabaseに保存します。</p>
                                 
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">デバイスID</label>
-                                        <input type="text" id="opensmile-device-id" placeholder="d067d407-cf73-4174-a9c1-d91fb60d64d0" 
-                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">ファイルパス</label>
+                                        <textarea id="opensmile-file-paths" 
+                                                  placeholder="例: files/d067d407-cf73-4174-a9c1-d91fb60d64d0/2025-07-20/00-00/audio.wav&#10;複数のファイルパスを改行で区切って入力できます" 
+                                                  rows="3"
+                                                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm"></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">※複数のファイルを処理する場合は、1行に1つのファイルパスを入力してください</p>
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">日付</label>
-                                        <input type="date" id="opensmile-date" 
-                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">特徴量セット</label>
+                                            <select id="opensmile-feature-set" class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" disabled>
+                                                <option value="eGeMAPSv02" selected>eGeMAPSv02（25特徴量、固定）</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">生特徴量含有</label>
+                                            <select id="opensmile-include-raw" class="w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm">
+                                                <option value="false" selected>無効（推奨）</option>
+                                                <option value="true">有効</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                                 
