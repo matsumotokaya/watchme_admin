@@ -99,12 +99,27 @@ export function closeModal() {
 // =============================================================================
 
 export function setupTabs() {
+    // URLパラメータからタブを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabFromUrl = urlParams.get('tab');
+    
+    // タブボタンのクリックイベント
     state.elements.tabButtons.forEach(button => {
         button.addEventListener('click', function() {
             const tabId = this.id.replace('-tab', '');
             switchTab(tabId);
+            
+            // URLを更新（ブラウザ履歴に追加）
+            const url = new URL(window.location);
+            url.searchParams.set('tab', tabId);
+            window.history.pushState({}, '', url);
         });
     });
+    
+    // URLパラメータで指定されたタブがあれば、そのタブを表示
+    if (tabFromUrl) {
+        switchTab(tabFromUrl);
+    }
 }
 
 export function switchTab(tabId) {
@@ -120,8 +135,9 @@ export function switchTab(tabId) {
         activeTab.classList.remove('border-transparent', 'text-gray-500');
     }
 
-    // タブコンテンツの表示を切り替え
-    state.elements.tabContents.forEach(content => {
+    // タブコンテンツの表示を切り替え（動的に取得）
+    const allTabContents = document.querySelectorAll('.tab-content');
+    allTabContents.forEach(content => {
         content.classList.add('hidden');
     });
     

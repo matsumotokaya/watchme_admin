@@ -381,6 +381,73 @@ class OpenSMILETrialScheduler(UnifiedTrialScheduler):
                 error_message = opensmile_result.get("message", "不明なエラー")
                 self._add_log("error", f"❌ OpenSMILE処理失敗: {error_message}")
 
+class PromptTrialScheduler(UnifiedTrialScheduler):
+    """Whisperプロンプト生成試験版スケジューラークラス"""
+    
+    def __init__(self):
+        super().__init__(
+            api_name="Prompt",
+            job_id="prompt_trial_scheduler",
+            api_type=SchedulerAPIType.PROMPT
+        )
+    
+    def _get_status_field(self) -> str:
+        """プロンプト生成にはステータスフィールドがない（全件処理）"""
+        return None
+    
+    async def _find_pending_files(self, all_possible_files: List[Dict[str, str]]) -> List[str]:
+        """プロンプト生成は全件処理するため、ステータスチェックをスキップ"""
+        # 当日のすべてのスロットを処理対象とする
+        return [file_info['file_path'] for file_info in all_possible_files]
+    
+    async def _process_slots(self):
+        """当日の全スロットを処理して上書き"""
+        start_time = datetime.now()
+        self._add_log("info", f"🚀 {self.api_name}自動処理を開始（当日全件処理）")
+        
+        try:
+            # 当日の日付を取得
+            today = datetime.now().strftime('%Y-%m-%d')
+            
+            # プロンプト生成APIを呼び出し（当日の全データを処理）
+            await self._process_files_with_api(today)
+            
+            total_time = (datetime.now() - start_time).total_seconds()
+            self._add_log("info", f"🏁 {self.api_name}自動処理完了（総実行時間: {total_time:.1f}秒）")
+            
+        except Exception as e:
+            self._add_log("error", f"❌ {self.api_name}自動処理エラー: {str(e)}")
+    
+    async def _process_files_with_api(self, date: str):
+        """プロンプト生成APIで当日データを処理"""
+        self._add_log("info", f"📝 プロンプト生成APIで{date}のデータを処理開始...")
+        
+        async with httpx.AsyncClient(timeout=600.0) as session:
+            prompt_result = await call_api(
+                session, 
+                "Whisperプロンプト生成（自動処理）", 
+                API_ENDPOINTS["prompt_gen"], 
+                method='get',
+                params={
+                    "device_id": self.device_id,
+                    "date": date
+                }
+            )
+            
+            if prompt_result["success"]:
+                data = prompt_result.get("data", {})
+                message = data.get("message", "処理完了")
+                prompt_data = data.get("prompt_data", {})
+                
+                if prompt_data:
+                    total_length = len(prompt_data.get("summary", ""))
+                    self._add_log("success", f"✅ プロンプト生成完了: {message}、プロンプト長: {total_length}文字")
+                else:
+                    self._add_log("warning", f"⚠️ プロンプト生成完了: データなし")
+            else:
+                error_message = prompt_result.get("message", "不明なエラー")
+                self._add_log("error", f"❌ プロンプト生成失敗: {error_message}")
+
 class APISchedulerManager:
     """各APIのスケジューラーを管理するクラス"""
     
@@ -690,10 +757,16 @@ def initialize_schedulers():
     register_scheduler("opensmile", opensmile_scheduler)
     create_scheduler_endpoints("opensmile")
     
+    # PromptTrialScheduler
+    prompt_scheduler = PromptTrialScheduler()
+    register_scheduler("prompt", prompt_scheduler)
+    create_scheduler_endpoints("prompt")
+    
     print("✅ スケジューラー動的エンドポイント生成完了")
     print(f"   - Whisper: /api/whisper-trial-scheduler/*")
     print(f"   - SED: /api/sed-trial-scheduler/*")
     print(f"   - OpenSMILE: /api/opensmile-trial-scheduler/*")
+    print(f"   - Prompt: /api/prompt-trial-scheduler/*")
 
 # スケジューラー初期化実行
 initialize_schedulers()
@@ -1340,217 +1413,7 @@ async def call_api(session, step_name, url, method='post', json_data=None, param
         print(f"❌ {step_name}API接続失敗: {error_msg}")
         return {"step": step_name, "success": False, "message": error_msg}
 
-@app.post("/api/batch/create-psychology-graph")
-async def create_psychology_graph_batch(request: Request):
-    """心理グラフ作成のバッチ処理を実行する"""
-    body = await request.json()
-    device_id = body.get("device_id")
-    date = body.get("date")
-
-    if not device_id or not date:
-        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
-
-    results = []
-    
-    # 初期化ログ
-    init_log = {
-        "step": "初期化", 
-        "success": True, 
-        "message": f"🚀 バッチ処理開始 - デバイス: {device_id[:8]}..., 日付: {date}"
-    }
-    results.append(init_log)
-
-    async with httpx.AsyncClient() as session:
-        # ステップ1: Whisperサーバー確認と処理
-        whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data={"device_id": device_id, "date": date, "model": "base"})
-        
-        # ヘルスチェック結果があれば追加
-        if "health_check" in whisper_result:
-            health_check = whisper_result["health_check"]
-            health_check["step"] = "Whisperサーバー確認"
-            results.append(health_check)
-        
-        results.append(whisper_result)
-        if not whisper_result["success"]:
-            return {"success": False, "message": "❌ Whisper処理で失敗しました。", "results": results}
-
-        # ステップ2: プロンプト生成サーバー確認と処理
-        prompt_params = {"device_id": device_id, "date": date}
-        prompt_result = await call_api(session, "プロンプト生成", API_ENDPOINTS["prompt_gen"], method='get', params=prompt_params)
-        
-        # ヘルスチェック結果があれば追加
-        if "health_check" in prompt_result:
-            health_check = prompt_result["health_check"]
-            health_check["step"] = "プロンプト生成サーバー確認"
-            results.append(health_check)
-        
-        results.append(prompt_result)
-        if not prompt_result["success"]:
-            return {"success": False, "message": "❌ プロンプト生成で失敗しました。", "results": results}
-
-        # ステップ3: ChatGPTサーバー確認と処理
-        chatgpt_result = await call_api(session, "ChatGPT心理分析", API_ENDPOINTS["chatgpt"], json_data={"device_id": device_id, "date": date})
-        
-        # ヘルスチェック結果があれば追加
-        if "health_check" in chatgpt_result:
-            health_check = chatgpt_result["health_check"]
-            health_check["step"] = "ChatGPTサーバー確認"
-            results.append(health_check)
-        
-        results.append(chatgpt_result)
-        if not chatgpt_result["success"]:
-            return {"success": False, "message": "❌ ChatGPT分析で失敗しました。", "results": results}
-
-    # 完了ログ
-    completion_log = {
-        "step": "完了", 
-        "success": True, 
-        "message": "🎉 バッチ処理が正常に完了しました。全てのステップが成功しました。"
-    }
-    results.append(completion_log)
-
-    return {"success": True, "message": "✅ バッチ処理が正常に完了しました。", "results": results}
-
-
-@app.post("/api/batch/create-behavior-graph")
-async def create_behavior_graph_batch(request: Request):
-    """
-    行動グラフ作成のバッチ処理
-    SED音響イベント検出 → SED Aggregatorを順番に実行
-    """
-    body = await request.json()
-    device_id = body.get("device_id")
-    date = body.get("date")
-    
-    if not device_id or not date:
-        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
-    
-    results = []
-    overall_success = True
-    
-    # 初期化
-    results.append({
-        "step": "初期化",
-        "message": "行動グラフ作成バッチ処理を開始します...",
-        "success": True
-    })
-    
-    # API定義（行動グラフ関連）
-    BEHAVIOR_API_ENDPOINTS = {
-        "sed": "/api/sed/fetch-and-process",  # プロキシ経由で呼び出し
-        "sed_aggregator": "/api/sed-aggregator/analysis/sed"  # プロキシ経由で呼び出し
-    }
-    
-    async with httpx.AsyncClient() as session:
-        # 1. APIヘルスチェック（相対パスの場合はスキップ）
-        for api_name, api_url in BEHAVIOR_API_ENDPOINTS.items():
-            if api_url.startswith('/'):
-                # 相対パスの場合はヘルスチェックをスキップ
-                results.append({
-                    "step": f"APIサーバー確認: {api_name}",
-                    "message": f"✅ {api_name} API は管理画面経由で呼び出されます",
-                    "success": True
-                })
-            else:
-                # 絶対URLの場合のみヘルスチェック
-                try:
-                    api_base_url = api_url.rsplit('/', 1)[0]
-                    health_check_url = f"{api_base_url}/health"
-                    port = api_base_url.split(':')[-1]
-                    
-                    health_response = await session.get(health_check_url, timeout=2.0)
-                    if health_response.status_code == 200:
-                        results.append({
-                            "step": f"APIサーバー確認: {api_name}",
-                            "message": f"✅ {api_name} API (ポート{port}) は正常に動作しています",
-                            "success": True
-                        })
-                    else:
-                        results.append({
-                            "step": f"APIサーバー確認: {api_name}",
-                            "message": f"⚠️ {api_name} API (ポート{port}) のヘルスチェックが失敗しました (status: {health_response.status_code})",
-                            "success": False
-                        })
-                except:
-                    # ヘルスチェックエンドポイントがない場合は続行
-                    port = api_url.split(':')[2].split('/')[0]
-                    results.append({
-                        "step": f"APIサーバー確認: {api_name}",
-                        "message": f"⚠️ {api_name} API (ポート{port}) のヘルスチェックができませんでした。処理を続行します。",
-                        "success": True
-                    })
-        
-        # 2. SED音響イベント検出
-        sed_result = await call_api(
-            session, 
-            "SED音響イベント検出", 
-            BEHAVIOR_API_ENDPOINTS["sed"], 
-            json_data={
-                "device_id": device_id,
-                "date": date
-            }
-        )
-        results.append(sed_result)
-        if not sed_result["success"]:
-            overall_success = False
-            results.append({
-                "step": "エラー",
-                "message": "SED音響イベント検出でエラーが発生したため、バッチ処理を中止します。",
-                "success": False
-            })
-            return {"success": False, "message": "❌ バッチ処理が失敗しました。", "results": results}
-        
-        # 3. SED Aggregator - 行動グラフデータ生成
-        aggregator_result = await call_api(
-            session, 
-            "SED Aggregator", 
-            BEHAVIOR_API_ENDPOINTS["sed_aggregator"], 
-            json_data={
-                "device_id": device_id,
-                "date": date
-            }
-        )
-        results.append(aggregator_result)
-        if not aggregator_result["success"]:
-            overall_success = False
-            results.append({
-                "step": "エラー",
-                "message": "SED Aggregatorでエラーが発生しましたが、SEDの処理は完了しています。",
-                "success": False
-            })
-            return {"success": False, "message": "❌ バッチ処理が部分的に失敗しました。", "results": results}
-    
-    # 完了
-    results.append({
-        "step": "完了",
-        "message": "🎉 行動グラフ作成バッチ処理が完了しました！",
-        "success": True
-    })
-    
-    return {"success": True, "message": "✅ バッチ処理が正常に完了しました。", "results": results}
-
-
-# =============================================================================
-# バッチ処理 - 個別ステップAPI（リアルタイム表示用）
-# =============================================================================
-
-@app.post("/api/batch/whisper-step")
-async def batch_whisper_step(request: Request):
-    """Whisperステップのみを実行"""
-    body = await request.json()
-    device_id = body.get("device_id")
-    date = body.get("date")
-
-    if not device_id or not date:
-        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
-
-    async with httpx.AsyncClient() as session:
-        whisper_result = await call_api(session, "Whisper音声文字起こし", API_ENDPOINTS["whisper"], json_data={"device_id": device_id, "date": date})
-        
-        if whisper_result["success"]:
-            return {"success": True, "message": "Whisper処理完了", "data": whisper_result.get("data")}
-        else:
-            return {"success": False, "message": whisper_result.get("message", "Whisper処理に失敗しました")}
+# バッチ処理関連のエンドポイントは削除されました
 
 @app.post("/api/whisper/fetch-and-transcribe")
 async def whisper_proxy(request: Request):
@@ -1627,42 +1490,6 @@ async def chatgpt_proxy(request: Request):
         else:
             raise HTTPException(status_code=500, detail=chatgpt_result.get("message", "ChatGPT処理に失敗しました"))
 
-@app.post("/api/batch/prompt-step")
-async def batch_prompt_step(request: Request):
-    """プロンプト生成ステップのみを実行"""
-    body = await request.json()
-    device_id = body.get("device_id")
-    date = body.get("date")
-
-    if not device_id or not date:
-        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
-
-    async with httpx.AsyncClient() as session:
-        prompt_params = {"device_id": device_id, "date": date}
-        prompt_result = await call_api(session, "プロンプト生成", API_ENDPOINTS["prompt_gen"], method='get', params=prompt_params)
-        
-        if prompt_result["success"]:
-            return {"success": True, "message": "プロンプト生成完了", "data": prompt_result.get("data")}
-        else:
-            return {"success": False, "message": prompt_result.get("message", "プロンプト生成に失敗しました")}
-
-@app.post("/api/batch/chatgpt-step")
-async def batch_chatgpt_step(request: Request):
-    """ChatGPT分析ステップのみを実行"""
-    body = await request.json()
-    device_id = body.get("device_id")
-    date = body.get("date")
-
-    if not device_id or not date:
-        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
-
-    async with httpx.AsyncClient() as session:
-        chatgpt_result = await call_api(session, "ChatGPT心理分析", API_ENDPOINTS["chatgpt"], json_data={"device_id": device_id, "date": date})
-        
-        if chatgpt_result["success"]:
-            return {"success": True, "message": "ChatGPT分析完了", "data": chatgpt_result.get("data")}
-        else:
-            return {"success": False, "message": chatgpt_result.get("message", "ChatGPT分析に失敗しました")}
 
 @app.post("/api/sed/fetch-and-process-paths")
 async def sed_proxy(request: Request):
