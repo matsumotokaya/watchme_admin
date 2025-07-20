@@ -16,6 +16,8 @@ export function initializePsychologyAnalysis() {
     setupPsychologyEventListeners();
     initializeSchedulers();
     checkWhisperAPIStatus(); // APIステータスチェックを追加
+    checkSEDAPIStatus(); // SED APIステータスチェックを追加
+    checkOpenSMILEAPIStatus(); // OpenSMILE APIステータスチェックを追加
     console.log('心理分析モジュール初期化完了');
 }
 
@@ -1043,44 +1045,103 @@ async function startChatGPTAnalysis() {
 // =============================================================================
 
 async function startSEDProcessing() {
-    const deviceId = document.getElementById('sed-device-id').value;
-    const date = document.getElementById('sed-date').value;
-    const button = document.getElementById('start-sed-btn');
-    const statusDiv = document.getElementById('sed-status');
+    console.log('SED処理開始ボタンがクリックされました');
     
-    if (!deviceId || !date) {
-        showNotification('デバイスIDと日付を入力してください', 'error');
+    const filePathsTextarea = document.getElementById('sed-file-paths');
+    if (!filePathsTextarea) {
+        console.error('sed-file-paths要素が見つかりません');
+        showNotification('エラー: 入力フィールドが見つかりません', 'error');
         return;
     }
     
+    const filePathsText = filePathsTextarea.value.trim();
+    const threshold = parseFloat(document.getElementById('sed-threshold').value) || 0.2;
+    const button = document.getElementById('start-sed-btn');
+    const statusDiv = document.getElementById('sed-status');
+    const resultsDiv = document.getElementById('sed-results');
+    const resultsContent = document.getElementById('sed-results-content');
+    
+    console.log('入力されたファイルパス:', filePathsText);
+    
+    // 入力チェック
+    if (!filePathsText) {
+        console.log('ファイルパスが入力されていません');
+        showNotification('ファイルパスを入力してください', 'error');
+        return;
+    }
+    
+    // ファイルパスを改行で分割して配列にする
+    const filePaths = filePathsText.split('\n')
+        .map(path => path.trim())
+        .filter(path => path.length > 0);
+    
+    console.log('処理するファイルパス配列:', filePaths);
+    
+    if (filePaths.length === 0) {
+        console.log('有効なファイルパスがありません');
+        showNotification('有効なファイルパスを入力してください', 'error');
+        return;
+    }
+    
+    // UI更新
+    console.log('UI要素を更新中...');
     button.disabled = true;
     button.textContent = '🔄 処理中...';
     statusDiv.textContent = 'SED音響イベント検出処理を開始しています...';
     
+    // 結果エリアをクリア
+    if (resultsDiv && resultsContent) {
+        resultsDiv.classList.add('hidden');
+        resultsContent.textContent = '';
+    }
+    
     try {
-        const response = await axios.post('/api/sed/fetch-and-process', {
-            device_id: deviceId,
-            date: date,
-            threshold: parseFloat(document.getElementById('sed-threshold').value) || 0.2
+        console.log('API呼び出し開始...');
+        const response = await axios({
+            method: 'POST',
+            url: '/api/sed/fetch-and-process-paths',
+            data: {
+                file_paths: filePaths,
+                threshold: threshold
+            },
+            timeout: 300000 // 5分タイムアウト
         });
         
+        console.log('API呼び出し完了:', response.data);
+        
         const data = response.data;
-        console.log('SED API Response:', data); // デバッグ用ログ
         
         // レスポンスの構造に応じて適切なフィールドを参照
-        const processedCount = data.summary?.audio_fetched || data.processed_count || 0;
-        const savedCount = data.summary?.supabase_saved || 0;
-        statusDiv.textContent = `SED処理完了: ${processedCount}件のファイルを処理、${savedCount}件を保存しました`;
-        showNotification(`SED処理が完了しました（${processedCount}件処理、${savedCount}件保存）`, 'success');
+        const processedCount = data.summary?.total_files || data.processed_files?.length || 0;
+        const errorCount = data.summary?.errors || 0;
+        const executionTime = data.execution_time_seconds ? data.execution_time_seconds.toFixed(2) : '不明';
+        
+        statusDiv.textContent = `SED処理完了: ${processedCount}件のファイルを処理しました（処理時間: ${executionTime}秒、エラー: ${errorCount}件）`;
+        showNotification(`SED処理が完了しました（${processedCount}件処理、エラー: ${errorCount}件）`, 'success');
+        
+        // 結果を表示
+        if (resultsDiv && resultsContent) {
+            resultsContent.textContent = JSON.stringify(data, null, 2);
+            resultsDiv.classList.remove('hidden');
+        }
+        
+        console.log('処理完了');
         
     } catch (error) {
         console.error('SED処理エラー:', error);
         const errorMessage = error.response?.data?.detail || error.message || 'SED処理に失敗しました';
         statusDiv.textContent = `エラー: ${errorMessage}`;
         showNotification(errorMessage, 'error');
+        
+        // エラー詳細も表示
+        if (resultsDiv && resultsContent) {
+            resultsContent.textContent = `エラー詳細:\n${JSON.stringify(error.response?.data || error.message, null, 2)}`;
+            resultsDiv.classList.remove('hidden');
+        }
     } finally {
         button.disabled = false;
-        button.textContent = '🔊 SED処理開始';
+        button.textContent = '🎵 SED処理開始';
+        console.log('処理終了、UI復元完了');
     }
 }
 
@@ -1133,6 +1194,41 @@ async function startSEDAggregatorProcessing() {
         button.textContent = '📊 SED Aggregator';
     }
 }
+
+// =============================================================================
+// SED API ステータスチェック
+// =============================================================================
+
+async function checkSEDAPIStatus() {
+    const statusElement = document.getElementById('sed-api-status');
+    if (!statusElement) return;
+
+    try {
+        const response = await axios.get('/api/sed/status', { timeout: 10000 });
+        
+        const data = response.data;
+        if (data.status === 'online') {
+            statusElement.textContent = '✅ 稼働中';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800';
+            console.log('SED API稼働確認:', data.data);
+        } else if (data.status === 'error') {
+            statusElement.textContent = '⚠️ 応答異常';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800';
+            console.warn('SED APIエラー:', data.message);
+        } else {
+            statusElement.textContent = '❌ オフライン';
+            statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800';
+            console.error('SED APIオフライン:', data.message);
+        }
+    } catch (error) {
+        console.error('SED APIステータス確認エラー:', error);
+        statusElement.textContent = '❌ 接続エラー';
+        statusElement.className = 'ml-2 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800';
+    }
+}
+
+// 定期的にAPIステータスをチェック（30秒ごと）
+setInterval(checkSEDAPIStatus, 30000);
 
 // =============================================================================
 // OpenSMILE API ステータスチェック

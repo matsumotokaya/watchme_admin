@@ -14,7 +14,7 @@ FastAPIとSupabaseを使用したデバイス・ユーザー管理システム�
 - 🤖 **ChatGPTスコアリング** → `https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase`
 
 **行動グラフタブ** - 以下機能は本番マイクロサービスAPIに接続済み：
-- 🎵 **SED音響イベント検出** → `https://api.hey-watch.me/behavior-features/fetch-and-process`
+- 🎵 **SED音響イベント検出** → `https://api.hey-watch.me/behavior-features/fetch-and-process-paths` ✨ **NEW: Whisper APIパターン準拠**
 - 📊 **SED Aggregator** → `https://api.hey-watch.me/behavior-aggregator/analysis/sed`
 
 **感情グラフタブ** - 以下機能は本番マイクロサービスAPIに接続済み：
@@ -83,6 +83,58 @@ OpenSMILE音声特徴量抽出機能を**Whisper API v2.0.0のパターンに完
 ##### 🎯 開発効率の向上
 
 - **学習コスト削減**: Whisperと同じ操作方法でOpenSMILEも利用可能
+- **保守性向上**: 統一されたコードパターンで保守が容易
+- **拡張性確保**: 他の音声処理APIも同じパターンで実装可能
+
+### 🎵 SED音響イベント検出のWhisper APIパターン準拠 ✨
+
+#### 🚀 行動グラフタブの統一されたインターフェース実現
+
+SED音響イベント検出機能を**Whisper API v1.5.0のパターンに完全準拠**させ、管理画面での音声処理APIの更なる統一化を実現しました。
+
+##### 📈 主要な変更内容
+
+1. **エンドポイント刷新**
+   ```diff
+   - POST /fetch-and-process (device_id/date指定)
+   + POST /fetch-and-process-paths (file_paths配列指定)
+   ```
+
+2. **統一されたUI設計**
+   - **Whisperセクションと同じインターフェース**: ファイルパス入力、APIステータス表示、結果表示
+   - **リアルタイムAPIステータス**: 30秒間隔での稼働状況確認（✅稼働中 / ❌オフライン）
+   - **複数ファイル対応**: 改行区切りでの複数ファイルパス処理
+
+3. **file_pathsベースの処理フロー**
+   ```javascript
+   // 新しい処理方式
+   const filePaths = filePathsText.split('\n')
+       .map(path => path.trim())
+       .filter(path => path.length > 0);
+   
+   await axios.post('/api/sed/fetch-and-process-paths', {
+       file_paths: filePaths,
+       threshold: 0.2
+   });
+   ```
+
+4. **本番API連携強化**
+   - **エンドポイント**: `https://api.hey-watch.me/behavior-features/fetch-and-process-paths`
+   - **バージョン**: SED API v1.5.0 (Whisper APIパターン準拠)
+   - **S3直接アクセス**: AWS S3から直接音声ファイルを取得
+   - **ステータス管理**: `audio_files.behavior_features_status`の確実な更新
+
+##### ✅ 実現した統一性
+
+**行動グラフタブのSED音響イベント検出が心理グラフタブのWhisperと同じインターフェースパターンで統一**:
+- 📝 **ファイルパス入力**: 複数行テキストエリアでの直感的操作
+- 🟢 **APIステータス**: リアルタイム稼働状況の視覚的確認
+- 📊 **処理結果**: 統一されたレスポンス表示とエラーハンドリング
+- ⚡ **高速処理**: file_pathsベースのS3直接アクセス（1.8秒で処理完了確認済み）
+
+##### 🎯 開発効率の向上
+
+- **統一された操作感**: Whisper、OpenSMILE、SEDすべてが同じインターフェースパターン
 - **保守性向上**: 統一されたコードパターンで保守が容易
 - **拡張性確保**: 他の音声処理APIも同じパターンで実装可能
 

@@ -1081,7 +1081,7 @@ API_ENDPOINTS = {
     "whisper": "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe",
     "prompt_gen": "https://api.hey-watch.me/vibe-aggregator/generate-mood-prompt-supabase",
     "chatgpt": "https://api.hey-watch.me/vibe-scorer/analyze-vibegraph-supabase",
-    "sed": "https://api.hey-watch.me/behavior-features/fetch-and-process",
+    "sed": "https://api.hey-watch.me/behavior-features/fetch-and-process-paths",
     "sed_aggregator": "https://api.hey-watch.me/behavior-aggregator/analysis/sed",
     "opensmile": "https://api.hey-watch.me/emotion-features/process/emotion-features",
     "opensmile_aggregator": "https://api.hey-watch.me/emotion-aggregator/analyze/opensmile-aggregator"
@@ -1463,25 +1463,63 @@ async def batch_chatgpt_step(request: Request):
         else:
             return {"success": False, "message": chatgpt_result.get("message", "ChatGPT分析に失敗しました")}
 
-@app.post("/api/sed/fetch-and-process")
+@app.post("/api/sed/fetch-and-process-paths")
 async def sed_proxy(request: Request):
-    """SED音響イベント検出APIへのプロキシエンドポイント（CORS回避用）"""
+    """SED音響イベント検出APIへのプロキシエンドポイント（CORS回避用、file_pathsベース）"""
     body = await request.json()
+    file_paths = body.get("file_paths")
+    threshold = body.get("threshold", 0.2)
+    
+    # 旧形式との互換性を保持
     device_id = body.get("device_id")
     date = body.get("date")
-    threshold = body.get("threshold", 0.2)
-
-    if not device_id or not date:
-        raise HTTPException(status_code=400, detail="device_idとdateは必須です")
+    
+    # file_pathsが指定されている場合は新形式
+    if file_paths:
+        sed_data = {
+            "file_paths": file_paths,
+            "threshold": threshold
+        }
+    # device_idとdateが指定されている場合は旧形式（廃止予定）
+    elif device_id and date:
+        raise HTTPException(status_code=400, detail="device_id/date指定は廃止されました。file_pathsを指定してください")
+    else:
+        raise HTTPException(status_code=400, detail="file_pathsは必須です")
 
     async with httpx.AsyncClient(timeout=300.0) as session:
-        sed_data = {"device_id": device_id, "date": date, "threshold": threshold}
         sed_result = await call_api(session, "SED音響イベント検出", API_ENDPOINTS["sed"], json_data=sed_data)
         
         if sed_result["success"]:
             return sed_result.get("data", {})
         else:
             raise HTTPException(status_code=500, detail=sed_result.get("message", "SED処理に失敗しました"))
+
+@app.get("/api/sed/status")
+async def sed_status():
+    """SED APIのステータス確認エンドポイント"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as session:
+            # SED APIのヘルスチェック
+            health_url = "https://api.hey-watch.me/behavior-features/"
+            response = await session.get(health_url)
+            
+            if response.status_code == 200:
+                health_data = response.json()
+                return {
+                    "status": "online",
+                    "message": f"SED API稼働中",
+                    "data": health_data
+                }
+            else:
+                return {
+                    "status": "error", 
+                    "message": f"ヘルスチェック異常: HTTP {response.status_code}"
+                }
+    except Exception as e:
+        return {
+            "status": "offline",
+            "message": f"接続失敗: {str(e)}"
+        }
 
 @app.post("/api/sed-aggregator/analysis/sed")
 async def sed_aggregator_proxy(request: Request):

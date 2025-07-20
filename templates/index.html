@@ -382,28 +382,31 @@
                             <div class="bg-orange-50 border border-orange-200 rounded-lg p-6">
                                 <h3 class="text-lg font-medium text-orange-900 mb-4">🎵 SED音響イベント検出</h3>
                                 <div class="text-xs text-orange-600 mb-2">
-                                    <span class="font-mono bg-orange-100 px-2 py-1 rounded">https://api.hey-watch.me/behavior-features/fetch-and-process</span>
+                                    <span class="font-mono bg-orange-100 px-2 py-1 rounded">https://api.hey-watch.me/behavior-features/fetch-and-process-paths</span>
+                                    <span id="sed-api-status" class="ml-2 px-2 py-1 rounded text-xs font-medium">
+                                        ⏳ 確認中...
+                                    </span>
                                 </div>
-                                <p class="text-sm text-orange-700 mb-4">指定したデバイスIDと日付の音声データを音響イベント検出して、データベースに保存します。</p>
+                                <p class="text-sm text-orange-700 mb-4">指定したファイルパスの音声データから音響イベントを検出して、データベースに保存します。</p>
                                 
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="grid grid-cols-1 gap-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">デバイスID</label>
-                                        <input type="text" id="sed-device-id" placeholder="d067d407-cf73-4174-a9c1-d91fb60d64d0" 
-                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">ファイルパス</label>
+                                        <textarea id="sed-file-paths" 
+                                                  placeholder="例: files/d067d407-cf73-4174-a9c1-d91fb60d64d0/2025-07-20/00-00/audio.wav&#10;複数のファイルパスを改行で区切って入力できます" 
+                                                  rows="3"
+                                                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">※複数のファイルを処理する場合は、1行に1つのファイルパスを入力してください</p>
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">日付</label>
-                                        <input type="date" id="sed-date" 
-                                               class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">閾値</label>
-                                        <select id="sed-threshold" class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
-                                            <option value="0.1">0.1（高感度）</option>
-                                            <option value="0.2" selected>0.2（標準）</option>
-                                            <option value="0.3">0.3（低感度）</option>
-                                        </select>
+                                    <div class="grid grid-cols-1 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">検出閾値</label>
+                                            <select id="sed-threshold" class="w-full rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm">
+                                                <option value="0.1">0.1（高感度）</option>
+                                                <option value="0.2" selected>0.2（標準）</option>
+                                                <option value="0.3">0.3（低感度）</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                                 
