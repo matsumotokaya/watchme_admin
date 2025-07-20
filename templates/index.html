@@ -424,6 +424,58 @@
                                         <pre id="sed-results-content" class="whitespace-pre-wrap text-gray-600"></pre>
                                     </div>
                                 </div>
+                                
+                                <!-- SED自動スケジューラー設定（試験版） -->
+                                <div class="mt-6">
+                                    <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h5 class="text-sm font-medium text-orange-900">🧪 SED自動スケジューラー（試験版）</h5>
+                                            <div class="flex items-center space-x-2">
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" id="sed-trial-scheduler-toggle" class="sr-only peer">
+                                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                                                    <span class="ml-3 text-sm font-medium text-gray-700">ON/OFF</span>
+                                                </label>
+                                                <button id="sed-process-24hours-btn" class="inline-flex items-center px-3 py-1 text-xs font-medium text-green-700 bg-green-100 border border-green-300 rounded-md hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500">
+                                                    過去24時間分を処理
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 機能説明 -->
+                                        <div class="mb-4 p-3 bg-orange-100 border border-orange-300 rounded-md">
+                                            <h6 class="text-xs font-semibold text-orange-800 mb-2">📝 処理の仕組み：</h6>
+                                            <ul class="text-xs text-orange-700 space-y-1">
+                                                <li>• <strong>自動実行</strong>：ON/OFFボタンで3時間おきの定期実行を設定（0:00, 3:00, 6:00...）</li>
+                                                <li>• <strong>手動実行</strong>：「過去24時間分を処理」ボタンで即座に実行</li>
+                                                <li>• <strong>処理方式</strong>：48個のタイムスロット（30分単位）を機械的に生成してチェック</li>
+                                                <li>• <strong>デバイス</strong>：d067d407-cf73-4174-a9c1-d91fb60d64d0（固定・試験用）</li>
+                                                <li>• <strong>効率化</strong>：データベースでpending状態のファイルのみを処理</li>
+                                            </ul>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-600 mb-1">スケジュール仕様</label>
+                                                <div class="text-xs text-gray-700 bg-white rounded px-2 py-1 border">3時間おき（固定）</div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-600 mb-1">実行状態</label>
+                                                <div id="sed-trial-status-text" class="text-xs text-gray-500 py-2">停止中</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 処理ログ表示 -->
+                                        <div class="mt-3 p-2 bg-white border border-orange-200 rounded max-h-32 overflow-y-auto">
+                                            <div class="text-xs text-gray-600 mb-1">
+                                                <span class="font-medium">処理ログ:</span>
+                                            </div>
+                                            <div id="sed-trial-logs" class="text-xs text-gray-500 space-y-1">
+                                                ログがここに表示されます...
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
@@ -530,6 +582,36 @@
                                     <h4 class="text-sm font-medium text-gray-700 mb-2">処理結果</h4>
                                     <div class="bg-gray-50 rounded-md p-4 text-sm">
                                         <pre id="opensmile-results-content" class="whitespace-pre-wrap text-gray-600"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- OpenSMILE自動スケジューラー（試験版） -->
+                        <div class="mt-6">
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <h5 class="text-sm font-medium text-green-900">🧪 OpenSMILE自動スケジューラー（試験版）</h5>
+                                    <div class="flex items-center space-x-2">
+                                        <span id="opensmile-trial-status-text" class="text-xs text-gray-500">停止中</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" id="opensmile-trial-scheduler-toggle" class="sr-only peer">
+                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-center mb-3">
+                                    <p class="text-xs text-green-700">3時間毎（0,3,6,9,12,15,18,21時）に過去24時間分の未処理音声を自動的にOpenSMILE処理</p>
+                                    <button id="opensmile-process-24hours-btn" class="inline-flex items-center px-3 py-1 border border-green-300 text-xs font-medium rounded text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        📈 OpenSMILE24時間処理
+                                    </button>
+                                </div>
+                                
+                                <!-- ログ表示エリア -->
+                                <div class="mt-3">
+                                    <h6 class="text-xs font-medium text-green-800 mb-1">実行ログ</h6>
+                                    <div id="opensmile-trial-logs" class="bg-green-100 rounded border p-2 h-32 overflow-y-auto text-xs font-mono text-green-700">
+                                        <!-- ログがここに表示されます -->
                                     </div>
                                 </div>
                             </div>

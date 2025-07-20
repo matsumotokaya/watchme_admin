@@ -73,25 +73,30 @@ def get_supabase_client():
 # スケジューラー管理クラス
 # =============================================================================
 
-class WhisperTrialScheduler:
-    """Whisper試験版スケジューラークラス"""
+from abc import ABC, abstractmethod
+
+class UnifiedTrialScheduler(ABC):
+    """統一スケジューラーベースクラス"""
     
-    def __init__(self):
+    def __init__(self, api_name: str, job_id: str, api_type: SchedulerAPIType):
         self.scheduler = AsyncIOScheduler()
         self.is_running = False
         self.logs: List[SchedulerLogEntry] = []
-        self.job_id = "whisper_trial_scheduler"
+        self.job_id = job_id
+        self.api_name = api_name
+        self.api_type = api_type
+        self.device_id = "d067d407-cf73-4174-a9c1-d91fb60d64d0"  # デフォルトデバイスID
         self.scheduler.start()
         
     def start_trial_scheduler(self):
         """3時間おきのスケジューラーを開始"""
         if self.is_running:
-            self._add_log("warning", "スケジューラーは既に実行中です")
+            self._add_log("warning", f"{self.api_name}スケジューラーは既に実行中です")
             return False
             
         # 3時間おきのcron設定 (0, 3, 6, 9, 12, 15, 18, 21時)
         self.scheduler.add_job(
-            self._process_whisper_slots,
+            self._process_slots,
             'cron',
             hour='0,3,6,9,12,15,18,21',
             id=self.job_id,
@@ -99,22 +104,22 @@ class WhisperTrialScheduler:
         )
         
         self.is_running = True
-        self._add_log("success", "Whisper試験スケジューラーを開始しました")
+        self._add_log("success", f"{self.api_name}試験スケジューラーを開始しました")
         return True
         
     def stop_trial_scheduler(self):
         """スケジューラーを停止"""
         if not self.is_running:
-            self._add_log("warning", "スケジューラーは実行されていません")
+            self._add_log("warning", f"{self.api_name}スケジューラーは実行されていません")
             return False
             
         try:
             self.scheduler.remove_job(self.job_id)
             self.is_running = False
-            self._add_log("success", "Whisper試験スケジューラーを停止しました")
+            self._add_log("success", f"{self.api_name}試験スケジューラーを停止しました")
             return True
         except Exception as e:
-            self._add_log("error", f"スケジューラー停止に失敗: {str(e)}")
+            self._add_log("error", f"{self.api_name}スケジューラー停止に失敗: {str(e)}")
             return False
             
     def _generate_file_paths_for_24hours(self, device_id: str) -> List[Dict[str, str]]:
@@ -154,50 +159,54 @@ class WhisperTrialScheduler:
         
         return file_paths
     
-    async def _process_whisper_slots(self):
-        """24時間前から現在までの未処理音声を処理"""
+    async def _find_pending_files(self, all_possible_files: List[Dict[str, str]]) -> List[str]:
+        """データベースから未処理ファイルを特定"""
+        supabase_client = get_supabase_client()
+        pending_file_paths = []
+        
+        self._add_log("info", "🔍 データベースとの突き合わせを開始...")
+        
+        # 各ファイルパスについてデータベースを確認
+        for file_info in all_possible_files:
+            file_path = file_info['file_path']
+            date_str = file_info['date']
+            time_block = file_info['time_block']
+            
+            # audio_filesテーブルから該当レコードを検索
+            result = await supabase_client.select(
+                "audio_files",
+                filters={
+                    "device_id": self.device_id,
+                    "file_path": file_path
+                }
+            )
+            
+            if result and len(result) > 0:
+                record = result[0]
+                # pendingステータスの場合のみ処理対象に追加
+                status_field = self._get_status_field()
+                if record.get(status_field) == 'pending':
+                    pending_file_paths.append(file_path)
+                    self._add_log("info", f"  ✅ {time_block} - pending状態、処理対象に追加")
+                else:
+                    self._add_log("info", f"  ⏭️ {time_block} - {record.get(status_field, 'unknown')}、スキップ")
+            else:
+                self._add_log("info", f"  ❌ {time_block} - レコードなし、スキップ")
+        
+        return pending_file_paths
+    
+    async def _process_slots(self):
+        """24時間前から現在までの未処理音声を処理（共通ロジック）"""
         start_time = datetime.now()
-        self._add_log("info", "🚀 Whisper自動処理を開始")
+        self._add_log("info", f"🚀 {self.api_name}自動処理を開始")
         
         try:
-            # デフォルトデバイスID
-            device_id = "d067d407-cf73-4174-a9c1-d91fb60d64d0"
-            
             # 過去24時間分のファイルパスを生成
-            all_possible_files = self._generate_file_paths_for_24hours(device_id)
+            all_possible_files = self._generate_file_paths_for_24hours(self.device_id)
             self._add_log("info", f"📋 48スロット分のファイルパスを生成しました")
             
             # データベースと突き合わせ
-            supabase_client = get_supabase_client()
-            pending_file_paths = []
-            
-            self._add_log("info", "🔍 データベースとの突き合わせを開始...")
-            
-            # 各ファイルパスについてデータベースを確認
-            for file_info in all_possible_files:
-                file_path = file_info['file_path']
-                date_str = file_info['date']
-                time_block = file_info['time_block']
-                
-                # audio_filesテーブルから該当レコードを検索
-                result = await supabase_client.select(
-                    "audio_files",
-                    filters={
-                        "device_id": device_id,
-                        "file_path": file_path
-                    }
-                )
-                
-                if result and len(result) > 0:
-                    record = result[0]
-                    # pendingステータスの場合のみ処理対象に追加
-                    if record.get('transcriptions_status') == 'pending':
-                        pending_file_paths.append(file_path)
-                        self._add_log("info", f"  ✅ {time_block} - pending状態、処理対象に追加")
-                    else:
-                        self._add_log("info", f"  ⏭️ {time_block} - {record.get('transcriptions_status', 'unknown')}、スキップ")
-                else:
-                    self._add_log("info", f"  ❌ {time_block} - レコードなし、スキップ")
+            pending_file_paths = await self._find_pending_files(all_possible_files)
             
             self._add_log("info", f"📊 突き合わせ結果: {len(pending_file_paths)}件のpendingファイルを検出")
             
@@ -205,55 +214,21 @@ class WhisperTrialScheduler:
                 self._add_log("info", "ℹ️ 処理対象のファイルがありません（すべて処理済みまたはレコードなし）")
                 return
             
-            # Whisper APIに処理を依頼
-            self._add_log("info", f"🎤 Whisper APIに{len(pending_file_paths)}件のファイルを送信...")
+            # API処理（サブクラスで実装）
+            await self._process_files_with_api(pending_file_paths)
             
-            async with httpx.AsyncClient(timeout=600) as client:
-                url = "https://api.hey-watch.me/vibe-transcriber/fetch-and-transcribe"
-                payload = {
-                    "file_paths": pending_file_paths,
-                    "model": "base"
-                }
-                
-                response = await client.post(url, json=payload)
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    summary = result.get("summary", {})
-                    
-                    # 処理結果をログに記録
-                    processed = summary.get("pending_processed", 0)
-                    errors = summary.get("errors", 0)
-                    
-                    self._add_log("success", f"✅ Whisper処理完了: {processed}件を処理、{errors}件のエラー")
-                    
-                    if result.get("processed_files"):
-                        for file_path in result["processed_files"]:
-                            time_block = file_path.split('/')[-2] if '/' in file_path else 'unknown'
-                            self._add_log("info", f"  ✅ {time_block} - 文字起こし完了")
-                else:
-                    self._add_log("error", f"❌ Whisper API エラー: ステータス {response.status_code}")
-                    self._add_log("error", f"Response: {response.text}")
+            total_time = (datetime.now() - start_time).total_seconds()
+            self._add_log("info", f"🏁 {self.api_name}自動処理完了（総実行時間: {total_time:.1f}秒）")
             
-            # 処理完了
-            duration = (datetime.now() - start_time).total_seconds()
-            self._add_log("success", f"🎉 Whisper自動処理完了 (実行時間: {duration:.1f}秒)")
-                    
         except Exception as e:
-            duration = (datetime.now() - start_time).total_seconds()
-            self._add_log("error", f"❌ 処理エラー: {str(e)} (実行時間: {duration:.1f}秒)")
-            
-    async def run_now(self):
-        """手動実行（今すぐ実行）"""
-        self._add_log("info", "📌 手動実行を開始")
-        await self._process_whisper_slots()
-            
+            self._add_log("error", f"❌ {self.api_name}自動処理エラー: {str(e)}")
+    
     def _add_log(self, status: str, message: str):
         """ログエントリを追加"""
         log_entry = SchedulerLogEntry(
             timestamp=datetime.now(),
-            api_type=SchedulerAPIType.WHISPER,
-            device_id="d067d407-cf73-4174-a9c1-d91fb60d64d0",
+            api_type=self.api_type,
+            device_id=self.device_id,
             status=status,
             message=message,
             execution_type="scheduled"
@@ -272,6 +247,139 @@ class WhisperTrialScheduler:
             "logs": self.logs[-20:],  # 最新20件
             "total_logs": len(self.logs)
         }
+    
+    async def run_now(self):
+        """手動実行（今すぐ実行）"""
+        self._add_log("info", f"📌 {self.api_name}手動実行を開始")
+        await self._process_slots()
+    
+    @abstractmethod
+    def _get_status_field(self) -> str:
+        """各APIのステータスフィールド名を返す"""
+        pass
+    
+    @abstractmethod
+    async def _process_files_with_api(self, file_paths: List[str]):
+        """各APIでファイルを処理する"""
+        pass
+
+class WhisperTrialScheduler(UnifiedTrialScheduler):
+    """Whisper試験版スケジューラークラス"""
+    
+    def __init__(self):
+        super().__init__(
+            api_name="Whisper",
+            job_id="whisper_trial_scheduler",
+            api_type=SchedulerAPIType.WHISPER
+        )
+    
+    def _get_status_field(self) -> str:
+        """Whisperのステータスフィールド名"""
+        return "transcriptions_status"
+    
+    async def _process_files_with_api(self, file_paths: List[str]):
+        """Whisper APIでファイルを処理"""
+        self._add_log("info", f"🎤 Whisper APIで{len(file_paths)}件のファイルを処理開始...")
+        
+        async with httpx.AsyncClient(timeout=600.0) as session:
+            whisper_result = await call_api(
+                session, 
+                "Whisper音声文字起こし（自動処理）", 
+                API_ENDPOINTS["whisper"], 
+                json_data={"file_paths": file_paths}
+            )
+            
+            if whisper_result["success"]:
+                data = whisper_result.get("data", {})
+                processed_count = data.get("total_processed", 0)
+                skipped_count = data.get("total_skipped", 0)
+                execution_time = data.get("execution_time_seconds", 0)
+                
+                self._add_log("success", f"✅ Whisper処理完了: {processed_count}件処理、{skipped_count}件スキップ、実行時間{execution_time:.1f}秒")
+            else:
+                error_message = whisper_result.get("message", "不明なエラー")
+                self._add_log("error", f"❌ Whisper処理失敗: {error_message}")
+
+class SEDTrialScheduler(UnifiedTrialScheduler):
+    """SED試験版スケジューラークラス"""
+    
+    def __init__(self):
+        super().__init__(
+            api_name="SED",
+            job_id="sed_trial_scheduler",
+            api_type=SchedulerAPIType.WHISPER  # SEDもWHISPER扱いで統一
+        )
+    
+    def _get_status_field(self) -> str:
+        """SEDのステータスフィールド名"""
+        return "behavior_features_status"
+    
+    async def _process_files_with_api(self, file_paths: List[str]):
+        """SED APIでファイルを処理"""
+        self._add_log("info", f"🎵 SED APIで{len(file_paths)}件のファイルを処理開始...")
+        
+        async with httpx.AsyncClient(timeout=600.0) as session:
+            sed_result = await call_api(
+                session, 
+                "SED音響イベント検出（自動処理）", 
+                API_ENDPOINTS["sed"], 
+                json_data={
+                    "file_paths": file_paths,
+                    "threshold": 0.2
+                }
+            )
+            
+            if sed_result["success"]:
+                data = sed_result.get("data", {})
+                processed_count = data.get("summary", {}).get("total_files", 0)
+                errors = data.get("summary", {}).get("errors", 0)
+                execution_time = data.get("execution_time_seconds", 0)
+                
+                self._add_log("success", f"✅ SED処理完了: {processed_count}件処理、エラー{errors}件、実行時間{execution_time:.1f}秒")
+            else:
+                error_message = sed_result.get("message", "不明なエラー")
+                self._add_log("error", f"❌ SED処理失敗: {error_message}")
+
+class OpenSMILETrialScheduler(UnifiedTrialScheduler):
+    """OpenSMILE試験版スケジューラークラス"""
+    
+    def __init__(self):
+        super().__init__(
+            api_name="OpenSMILE",
+            job_id="opensmile_trial_scheduler",
+            api_type=SchedulerAPIType.WHISPER  # OpenSMILEもWHISPER扱いで統一
+        )
+    
+    def _get_status_field(self) -> str:
+        """OpenSMILEのステータスフィールド名"""
+        return "emotion_features_status"
+    
+    async def _process_files_with_api(self, file_paths: List[str]):
+        """OpenSMILE APIでファイルを処理"""
+        self._add_log("info", f"🎵 OpenSMILE APIで{len(file_paths)}件のファイルを処理開始...")
+        
+        async with httpx.AsyncClient(timeout=600.0) as session:
+            opensmile_result = await call_api(
+                session, 
+                "OpenSMILE音声特徴量抽出（自動処理）", 
+                API_ENDPOINTS["opensmile"], 
+                json_data={
+                    "file_paths": file_paths,
+                    "feature_set": "eGeMAPSv02",
+                    "include_raw_features": False
+                }
+            )
+            
+            if opensmile_result["success"]:
+                data = opensmile_result.get("data", {})
+                processed_count = data.get("summary", {}).get("total_files", 0) if data.get("summary") else len(file_paths)
+                errors = data.get("summary", {}).get("errors", 0) if data.get("summary") else 0
+                execution_time = data.get("execution_time_seconds", 0)
+                
+                self._add_log("success", f"✅ OpenSMILE処理完了: {processed_count}件処理、エラー{errors}件、実行時間{execution_time:.1f}秒")
+            else:
+                error_message = opensmile_result.get("message", "不明なエラー")
+                self._add_log("error", f"❌ OpenSMILE処理失敗: {error_message}")
 
 class APISchedulerManager:
     """各APIのスケジューラーを管理するクラス"""
@@ -500,7 +608,100 @@ class APISchedulerManager:
 
 # グローバルスケジューラー管理インスタンス
 scheduler_manager = APISchedulerManager()
-whisper_trial_scheduler = WhisperTrialScheduler()
+
+# スケジューラーインスタンスのレジストリ
+SCHEDULER_REGISTRY = {}
+
+def register_scheduler(name: str, scheduler_instance: UnifiedTrialScheduler):
+    """スケジューラーをレジストリに登録"""
+    SCHEDULER_REGISTRY[name] = scheduler_instance
+
+def create_scheduler_endpoints(name: str):
+    """指定されたスケジューラー名に対してAPIエンドポイントを動的生成"""
+    
+    @app.post(f"/api/{name}-trial-scheduler/start")
+    async def start_scheduler():
+        f""">{name}試験版スケジューラーを開始"""
+        try:
+            scheduler = SCHEDULER_REGISTRY[name]
+            success = scheduler.start_trial_scheduler()
+            if success:
+                return {"success": True, "message": f"{scheduler.api_name}試験スケジューラーを開始しました"}
+            else:
+                return {"success": False, "message": "スケジューラーは既に実行中です"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"スケジューラー開始エラー: {str(e)}")
+
+    @app.post(f"/api/{name}-trial-scheduler/stop")
+    async def stop_scheduler():
+        f""">{name}試験版スケジューラーを停止"""
+        try:
+            scheduler = SCHEDULER_REGISTRY[name]
+            success = scheduler.stop_trial_scheduler()
+            if success:
+                return {"success": True, "message": f"{scheduler.api_name}試験スケジューラーを停止しました"}
+            else:
+                return {"success": False, "message": "スケジューラーは実行されていません"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"スケジューラー停止エラー: {str(e)}")
+
+    @app.get(f"/api/{name}-trial-scheduler/status")
+    async def get_scheduler_status():
+        f""">{name}試験版スケジューラーの状態を取得"""
+        try:
+            scheduler = SCHEDULER_REGISTRY[name]
+            status = scheduler.get_status()
+            return status
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"スケジューラー状態取得エラー: {str(e)}")
+
+    @app.post(f"/api/{name}-trial-scheduler/run-now")
+    async def run_scheduler_now():
+        f""">{name}試験版スケジューラーを即座に実行"""
+        try:
+            scheduler = SCHEDULER_REGISTRY[name]
+            await scheduler.run_now()
+            return {"success": True, "message": f"{scheduler.api_name}試験処理を実行しました"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"スケジューラー実行エラー: {str(e)}")
+    
+    # 動的関数名設定（FastAPIの認識用）
+    start_scheduler.__name__ = f"start_{name}_trial_scheduler"
+    stop_scheduler.__name__ = f"stop_{name}_trial_scheduler"
+    get_scheduler_status.__name__ = f"get_{name}_trial_scheduler_status"
+    run_scheduler_now.__name__ = f"run_{name}_trial_scheduler_now"
+
+# 動的スケジューラー登録とエンドポイント生成
+def initialize_schedulers():
+    """スケジューラーを初期化して動的エンドポイントを生成"""
+    
+    # WhisperTrialScheduler
+    whisper_scheduler = WhisperTrialScheduler()
+    register_scheduler("whisper", whisper_scheduler)
+    create_scheduler_endpoints("whisper")
+    
+    # SEDTrialScheduler
+    sed_scheduler = SEDTrialScheduler()
+    register_scheduler("sed", sed_scheduler)
+    create_scheduler_endpoints("sed")
+    
+    # OpenSMILETrialScheduler
+    opensmile_scheduler = OpenSMILETrialScheduler()
+    register_scheduler("opensmile", opensmile_scheduler)
+    create_scheduler_endpoints("opensmile")
+    
+    print("✅ スケジューラー動的エンドポイント生成完了")
+    print(f"   - Whisper: /api/whisper-trial-scheduler/*")
+    print(f"   - SED: /api/sed-trial-scheduler/*")
+    print(f"   - OpenSMILE: /api/opensmile-trial-scheduler/*")
+
+# スケジューラー初期化実行
+initialize_schedulers()
+
+# 後方互換性のためのグローバル変数（既存コードとの互換性）
+whisper_trial_scheduler = SCHEDULER_REGISTRY["whisper"]
+sed_trial_scheduler = SCHEDULER_REGISTRY["sed"]
+opensmile_trial_scheduler = SCHEDULER_REGISTRY["opensmile"]
 
 
 @app.get("/health")
@@ -1756,51 +1957,6 @@ async def get_all_scheduler_status_endpoint():
         raise HTTPException(status_code=500, detail=f"全スケジューラー状態取得エラー: {str(e)}")
 
 
-# =============================================================================
-# Whisper試験版スケジューラーAPI
-# =============================================================================
-
-@app.post("/api/whisper-trial-scheduler/start")
-async def start_whisper_trial_scheduler():
-    """Whisper試験版スケジューラーを開始"""
-    try:
-        success = whisper_trial_scheduler.start_trial_scheduler()
-        if success:
-            return {"success": True, "message": "Whisper試験スケジューラーを開始しました"}
-        else:
-            return {"success": False, "message": "スケジューラーは既に実行中です"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"スケジューラー開始エラー: {str(e)}")
-
-@app.post("/api/whisper-trial-scheduler/stop")
-async def stop_whisper_trial_scheduler():
-    """Whisper試験版スケジューラーを停止"""
-    try:
-        success = whisper_trial_scheduler.stop_trial_scheduler()
-        if success:
-            return {"success": True, "message": "Whisper試験スケジューラーを停止しました"}
-        else:
-            return {"success": False, "message": "スケジューラーは実行されていません"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"スケジューラー停止エラー: {str(e)}")
-
-@app.get("/api/whisper-trial-scheduler/status")
-async def get_whisper_trial_scheduler_status():
-    """Whisper試験版スケジューラーの状態を取得"""
-    try:
-        status = whisper_trial_scheduler.get_status()
-        return status
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"スケジューラー状態取得エラー: {str(e)}")
-
-@app.post("/api/whisper-trial-scheduler/run-now")
-async def run_whisper_trial_scheduler_now():
-    """Whisper試験版スケジューラーを即座に実行"""
-    try:
-        await whisper_trial_scheduler._process_whisper_slots()
-        return {"success": True, "message": "Whisper試験処理を実行しました"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"スケジューラー実行エラー: {str(e)}")
 
 
 if __name__ == "__main__":

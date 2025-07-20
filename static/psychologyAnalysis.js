@@ -1426,8 +1426,8 @@ let schedulerStates = {
 };
 
 function initializeSchedulers() {
-    // Whisper試験版スケジューラーの初期化
-    initializeWhisperTrialScheduler();
+    // 統一スケジューラーシステムを初期化
+    initializeUnifiedSchedulers();
     
     // 既存の個別スケジューラー（非表示）
     updateSchedulerUI('prompt');
@@ -1438,28 +1438,17 @@ function initializeSchedulers() {
     loadSchedulerLogs('chatgpt');
 }
 
+// ============================================================================= 
+// 【非推奨】個別スケジューラー関数群（統一クラスに移行済み）
+// 後方互換性のためコメントアウト保持
+// =============================================================================
+
+/*
 function initializeWhisperTrialScheduler() {
-    // Whisper試験版スケジューラーの状態を取得・表示
-    updateWhisperTrialSchedulerStatus();
-    
-    // イベントリスナーを設定
-    const whisperTrialToggle = document.getElementById('whisper-trial-scheduler-toggle');
-    const process24HoursBtn = document.getElementById('whisper-process-24hours-btn');
-    
-    if (whisperTrialToggle) {
-        whisperTrialToggle.addEventListener('change', async (e) => {
-            await toggleWhisperTrialScheduler(e.target.checked);
-        });
-    }
-    
-    if (process24HoursBtn) {
-        process24HoursBtn.addEventListener('click', async () => {
-            await processWhisper24Hours();
-        });
-    }
-    
-    console.log('Whisper試験版スケジューラー初期化完了');
+    // 統一スケジューラーに移行済み - unifiedSchedulers.whisper.initialize()
+    console.warn('⚠️ initializeWhisperTrialScheduler()は非推奨です。統一スケジューラーを使用してください。');
 }
+*/
 
 function setupSchedulerEventListeners() {
     // Whisperスケジューラー
@@ -1672,92 +1661,19 @@ setInterval(() => {
 // Whisper試験版スケジューラー関数
 // =============================================================================
 
+/*
+// 【非推奨】統一クラス UnifiedTrialSchedulerManager.updateStatus() に移行済み
 async function updateWhisperTrialSchedulerStatus() {
-    try {
-        const response = await axios.get('/api/whisper-trial-scheduler/status');
-        const status = response.data;
-        
-        // UI更新
-        const toggle = document.getElementById('whisper-trial-scheduler-toggle');
-        const statusText = document.getElementById('whisper-trial-status-text');
-        const logsContainer = document.getElementById('whisper-trial-logs');
-        
-        if (toggle) {
-            toggle.checked = status.is_running;
-        }
-        
-        if (statusText) {
-            statusText.textContent = status.is_running ? '稼働中' : '停止中';
-            statusText.className = status.is_running ? 'text-green-600' : 'text-gray-500';
-        }
-        
-        // ログ表示
-        if (logsContainer && status.logs) {
-            const logHtml = status.logs.map(log => {
-                const time = new Date(log.timestamp).toLocaleTimeString();
-                let colorClass = 'text-gray-600';
-                
-                switch (log.status) {
-                    case 'success':
-                        colorClass = 'text-green-600';
-                        break;
-                    case 'error':
-                        colorClass = 'text-red-600';
-                        break;
-                    case 'warning':
-                        colorClass = 'text-yellow-600';
-                        break;
-                    case 'info':
-                        colorClass = 'text-blue-600';
-                        break;
-                }
-                
-                return `<div class="text-xs ${colorClass} font-mono">
-                    ${time} - ${log.message}
-                </div>`;
-            }).join('');
-            
-            logsContainer.innerHTML = logHtml;
-        }
-        
-        console.log('Whisper試験版スケジューラー状態更新完了:', status);
-        
-    } catch (error) {
-        console.error('Whisper試験版スケジューラー状態取得エラー:', error);
-    }
+    console.warn('⚠️ updateWhisperTrialSchedulerStatus()は非推奨です。unifiedSchedulers.whisper.updateStatus()を使用してください。');
 }
+*/
 
+/*
+// 【非推奨】統一クラス UnifiedTrialSchedulerManager.toggle() に移行済み
 async function toggleWhisperTrialScheduler(enabled) {
-    try {
-        const endpoint = enabled ? '/api/whisper-trial-scheduler/start' : '/api/whisper-trial-scheduler/stop';
-        const response = await axios.post(endpoint);
-        
-        if (response.data.success) {
-            showNotification(response.data.message, 'success');
-            // 状態を更新
-            setTimeout(() => {
-                updateWhisperTrialSchedulerStatus();
-            }, 500);
-        } else {
-            showNotification(response.data.message, 'warning');
-            // トグルを元に戻す
-            const toggle = document.getElementById('whisper-trial-scheduler-toggle');
-            if (toggle) {
-                toggle.checked = !enabled;
-            }
-        }
-        
-    } catch (error) {
-        console.error('Whisper試験版スケジューラー操作エラー:', error);
-        showNotification('スケジューラー操作に失敗しました', 'error');
-        
-        // トグルを元に戻す
-        const toggle = document.getElementById('whisper-trial-scheduler-toggle');
-        if (toggle) {
-            toggle.checked = !enabled;
-        }
-    }
+    console.warn('⚠️ toggleWhisperTrialScheduler()は非推奨です。unifiedSchedulers.whisper.toggle()を使用してください。');
 }
+*/
 
 async function runWhisperTrialSchedulerNow() {
     try {
@@ -1828,8 +1744,461 @@ async function processWhisper24Hours() {
     }
 }
 
-// 定期的にWhisper試験版スケジューラーの状態を更新
-setInterval(updateWhisperTrialSchedulerStatus, 30000); // 30秒毎
+/*
+// 【非推奨】統一クラスで自動管理されるため削除
+// setInterval(updateWhisperTrialSchedulerStatus, 30000);
+*/
+
+// =============================================================================
+// 【非推奨】SED試験版スケジューラー個別関数群（統一クラスに移行済み）
+// =============================================================================
+
+/*
+// 【非推奨】統一クラス UnifiedTrialSchedulerManager.initialize() に移行済み  
+function initializeSEDTrialScheduler() {
+    console.warn('⚠️ initializeSEDTrialScheduler()は非推奨です。統一スケジューラーを使用してください。');
+}
+*/
+
+async function updateSEDTrialSchedulerStatus() {
+    try {
+        const response = await axios.get('/api/sed-trial-scheduler/status');
+        const status = response.data;
+        
+        // UI更新
+        const toggle = document.getElementById('sed-trial-scheduler-toggle');
+        const statusText = document.getElementById('sed-trial-status-text');
+        const logsContainer = document.getElementById('sed-trial-logs');
+        
+        if (toggle) {
+            toggle.checked = status.is_running;
+        }
+        
+        if (statusText) {
+            statusText.textContent = status.is_running ? '稼働中' : '停止中';
+            statusText.className = status.is_running ? 'text-green-600' : 'text-gray-500';
+        }
+        
+        // ログ表示
+        if (logsContainer && status.logs) {
+            const logHtml = status.logs.map(log => {
+                const time = new Date(log.timestamp).toLocaleTimeString();
+                let colorClass = 'text-gray-600';
+                
+                switch (log.status) {
+                    case 'success':
+                        colorClass = 'text-green-600';
+                        break;
+                    case 'error':
+                        colorClass = 'text-red-600';
+                        break;
+                    case 'warning':
+                        colorClass = 'text-yellow-600';
+                        break;
+                    case 'info':
+                        colorClass = 'text-blue-600';
+                        break;
+                }
+                
+                return `<div class="text-xs ${colorClass} font-mono">
+                    ${time} - ${log.message}
+                </div>`;
+            }).join('');
+            
+            logsContainer.innerHTML = logHtml;
+        }
+        
+        console.log('SED試験版スケジューラー状態更新完了:', status);
+        
+    } catch (error) {
+        console.error('SED試験版スケジューラー状態取得エラー:', error);
+    }
+}
+
+async function toggleSEDTrialScheduler(enabled) {
+    try {
+        const endpoint = enabled ? '/api/sed-trial-scheduler/start' : '/api/sed-trial-scheduler/stop';
+        const response = await axios.post(endpoint);
+        
+        if (response.data.success) {
+            showNotification(response.data.message, 'success');
+            // 状態を更新
+            setTimeout(() => {
+                updateSEDTrialSchedulerStatus();
+            }, 500);
+        } else {
+            showNotification(response.data.message, 'warning');
+            // トグルを元に戻す
+            const toggle = document.getElementById('sed-trial-scheduler-toggle');
+            if (toggle) {
+                toggle.checked = !enabled;
+            }
+        }
+        
+    } catch (error) {
+        console.error('SED試験版スケジューラー操作エラー:', error);
+        showNotification('スケジューラー操作に失敗しました', 'error');
+        
+        // トグルを元に戻す
+        const toggle = document.getElementById('sed-trial-scheduler-toggle');
+        if (toggle) {
+            toggle.checked = !enabled;
+        }
+    }
+}
+
+async function runSEDTrialSchedulerNow() {
+    try {
+        const button = document.getElementById('sed-trial-run-now-btn');
+        if (button) {
+            button.disabled = true;
+            button.textContent = '実行中...';
+        }
+        
+        const response = await axios.post('/api/sed-trial-scheduler/run-now');
+        
+        if (response.data.success) {
+            showNotification(response.data.message, 'success');
+        } else {
+            showNotification('処理の実行に失敗しました', 'error');
+        }
+        
+        // 状態を更新
+        setTimeout(() => {
+            updateSEDTrialSchedulerStatus();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('SED試験版スケジューラー即時実行エラー:', error);
+        showNotification('処理の実行に失敗しました', 'error');
+    } finally {
+        const button = document.getElementById('sed-trial-run-now-btn');
+        if (button) {
+            button.disabled = false;
+            button.textContent = '今すぐ実行';
+        }
+    }
+}
+
+async function processSED24Hours() {
+    try {
+        const button = document.getElementById('sed-process-24hours-btn');
+        if (button) {
+            button.disabled = true;
+            button.textContent = '処理中...';
+        }
+        
+        showNotification('過去24時間分の処理を開始します', 'info');
+        
+        // 過去24時間分を処理するAPIを呼び出す（既存のrun-nowエンドポイントを使用）
+        const response = await axios.post('/api/sed-trial-scheduler/run-now');
+        
+        if (response.data.success) {
+            showNotification('過去24時間分の処理を開始しました', 'success');
+        } else {
+            showNotification('処理の開始に失敗しました', 'error');
+        }
+        
+        // 状態を更新
+        setTimeout(() => {
+            updateSEDTrialSchedulerStatus();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('過去24時間分処理エラー:', error);
+        showNotification('処理の開始に失敗しました', 'error');
+    } finally {
+        const button = document.getElementById('sed-process-24hours-btn');
+        if (button) {
+            button.disabled = false;
+            button.textContent = '過去24時間分を処理';
+        }
+    }
+}
+
+/*
+// 【非推奨】統一クラスで自動管理されるため削除
+// setInterval(updateSEDTrialSchedulerStatus, 30000);
+*/
+
+// =============================================================================
+// 統一スケジューラー管理クラス（フロントエンド共通化）
+// =============================================================================
+
+class UnifiedTrialSchedulerManager {
+    /**
+     * 統一された試験版スケジューラー管理クラス
+     * @param {string} apiName - API名 (whisper, sed, opensmile)
+     * @param {Object} config - 設定オブジェクト
+     */
+    constructor(apiName, config) {
+        this.apiName = apiName;
+        this.config = {
+            color: config.color || 'blue',
+            displayName: config.displayName || apiName.toUpperCase(),
+            icon: config.icon || '🧪',
+            ...config
+        };
+        
+        // DOM要素ID（命名規則ベース）
+        this.elements = {
+            toggle: `${apiName}-trial-scheduler-toggle`,
+            statusText: `${apiName}-trial-status-text`,
+            logsContainer: `${apiName}-trial-logs`,
+            runNowBtn: `${apiName}-process-24hours-btn`
+        };
+        
+        // API エンドポイント
+        this.endpoints = {
+            status: `/api/${apiName}-trial-scheduler/status`,
+            start: `/api/${apiName}-trial-scheduler/start`,
+            stop: `/api/${apiName}-trial-scheduler/stop`,
+            runNow: `/api/${apiName}-trial-scheduler/run-now`
+        };
+        
+        // 状態更新間隔を設定
+        this.statusUpdateInterval = null;
+    }
+    
+    /**
+     * スケジューラーを初期化
+     */
+    initialize() {
+        console.log(`${this.config.displayName}試験版スケジューラー初期化開始...`);
+        
+        // 初期状態更新
+        this.updateStatus();
+        
+        // イベントリスナー設定
+        this.setupEventListeners();
+        
+        // 定期的な状態更新開始
+        this.startStatusUpdates();
+        
+        console.log(`${this.config.displayName}試験版スケジューラー初期化完了`);
+    }
+    
+    /**
+     * イベントリスナーを設定
+     */
+    setupEventListeners() {
+        // トグルスイッチ
+        const toggle = document.getElementById(this.elements.toggle);
+        if (toggle) {
+            toggle.addEventListener('change', async (e) => {
+                await this.toggle(e.target.checked);
+            });
+        }
+        
+        // 手動実行ボタン
+        const runNowBtn = document.getElementById(this.elements.runNowBtn);
+        if (runNowBtn) {
+            runNowBtn.addEventListener('click', async () => {
+                await this.runNow();
+            });
+        }
+    }
+    
+    /**
+     * スケジューラーの状態を更新
+     */
+    async updateStatus() {
+        try {
+            const response = await axios.get(this.endpoints.status);
+            const status = response.data;
+            
+            // UI要素を更新
+            this.updateToggle(status.is_running);
+            this.updateStatusText(status.is_running);
+            this.updateLogs(status.logs);
+            
+        } catch (error) {
+            console.error(`${this.config.displayName}試験版スケジューラー状態取得エラー:`, error);
+        }
+    }
+    
+    /**
+     * トグルスイッチの状態を更新
+     */
+    updateToggle(isRunning) {
+        const toggle = document.getElementById(this.elements.toggle);
+        if (toggle) {
+            toggle.checked = isRunning;
+        }
+    }
+    
+    /**
+     * ステータステキストを更新
+     */
+    updateStatusText(isRunning) {
+        const statusText = document.getElementById(this.elements.statusText);
+        if (statusText) {
+            statusText.textContent = isRunning ? '稼働中' : '停止中';
+            statusText.className = isRunning ? 'text-green-600' : 'text-gray-500';
+        }
+    }
+    
+    /**
+     * ログを更新
+     */
+    updateLogs(logs) {
+        const logsContainer = document.getElementById(this.elements.logsContainer);
+        if (logsContainer && logs) {
+            const logHtml = logs.map(log => {
+                const time = new Date(log.timestamp).toLocaleTimeString();
+                const colorClass = this.getLogColorClass(log.status);
+                
+                return `<div class="text-xs ${colorClass} font-mono">
+                    ${time} - ${log.message}
+                </div>`;
+            }).join('');
+            
+            logsContainer.innerHTML = logHtml;
+        }
+    }
+    
+    /**
+     * ログステータスに応じた色クラスを取得
+     */
+    getLogColorClass(status) {
+        switch (status) {
+            case 'success': return 'text-green-600';
+            case 'error': return 'text-red-600';
+            case 'warning': return 'text-yellow-600';
+            case 'info': return 'text-blue-600';
+            default: return 'text-gray-600';
+        }
+    }
+    
+    /**
+     * スケジューラーのON/OFF切り替え
+     */
+    async toggle(enabled) {
+        try {
+            const endpoint = enabled ? this.endpoints.start : this.endpoints.stop;
+            const response = await axios.post(endpoint);
+            
+            if (response.data.success) {
+                showNotification(response.data.message, 'success');
+                // 状態を更新
+                setTimeout(() => {
+                    this.updateStatus();
+                }, 500);
+            } else {
+                showNotification(response.data.message, 'warning');
+                // トグルを元に戻す
+                this.updateToggle(!enabled);
+            }
+            
+        } catch (error) {
+            console.error(`${this.config.displayName}スケジューラー切り替えエラー:`, error);
+            const errorMessage = error.response?.data?.detail || error.message || `${this.config.displayName}スケジューラー操作に失敗しました`;
+            showNotification(errorMessage, 'error');
+            
+            // トグルを元に戻す
+            this.updateToggle(!enabled);
+        }
+    }
+    
+    /**
+     * 手動実行（24時間処理）
+     */
+    async runNow() {
+        try {
+            const runNowBtn = document.getElementById(this.elements.runNowBtn);
+            if (runNowBtn) {
+                runNowBtn.disabled = true;
+                runNowBtn.textContent = '実行中...';
+            }
+            
+            const response = await axios.post(this.endpoints.runNow);
+            
+            if (response.data.success) {
+                showNotification(`${this.config.displayName}24時間処理を開始しました`, 'success');
+                // 状態を更新
+                setTimeout(() => {
+                    this.updateStatus();
+                }, 1000);
+            } else {
+                showNotification(response.data.message, 'warning');
+            }
+            
+        } catch (error) {
+            console.error(`${this.config.displayName}手動実行エラー:`, error);
+            const errorMessage = error.response?.data?.detail || error.message || `${this.config.displayName}手動実行に失敗しました`;
+            showNotification(errorMessage, 'error');
+        } finally {
+            const runNowBtn = document.getElementById(this.elements.runNowBtn);
+            if (runNowBtn) {
+                runNowBtn.disabled = false;
+                runNowBtn.textContent = `📈 ${this.config.displayName}24時間処理`;
+            }
+        }
+    }
+    
+    /**
+     * 定期的な状態更新を開始
+     */
+    startStatusUpdates() {
+        if (this.statusUpdateInterval) {
+            clearInterval(this.statusUpdateInterval);
+        }
+        
+        this.statusUpdateInterval = setInterval(() => {
+            this.updateStatus();
+        }, 30000); // 30秒毎
+    }
+    
+    /**
+     * 定期的な状態更新を停止
+     */
+    stopStatusUpdates() {
+        if (this.statusUpdateInterval) {
+            clearInterval(this.statusUpdateInterval);
+            this.statusUpdateInterval = null;
+        }
+    }
+}
+
+// =============================================================================
+// スケジューラー設定とインスタンス作成
+// =============================================================================
+
+// スケジューラー設定
+const schedulerConfigs = {
+    whisper: {
+        color: 'blue',
+        displayName: 'Whisper',
+        icon: '🎤'
+    },
+    sed: {
+        color: 'orange', 
+        displayName: 'SED',
+        icon: '🎵'
+    },
+    opensmile: {
+        color: 'green',
+        displayName: 'OpenSMILE',
+        icon: '🎵'
+    }
+};
+
+// 統一スケジューラーインスタンス
+const unifiedSchedulers = {};
+
+// 統一スケジューラーの初期化関数
+function initializeUnifiedSchedulers() {
+    console.log('統一スケジューラーシステム初期化開始...');
+    
+    // 各スケジューラーを初期化
+    Object.keys(schedulerConfigs).forEach(apiName => {
+        const config = schedulerConfigs[apiName];
+        unifiedSchedulers[apiName] = new UnifiedTrialSchedulerManager(apiName, config);
+        unifiedSchedulers[apiName].initialize();
+    });
+    
+    console.log('統一スケジューラーシステム初期化完了');
+}
 
 // =============================================================================
 // DOMContentLoaded時の初期化
